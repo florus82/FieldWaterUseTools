@@ -9,7 +9,7 @@ import pandas as pd
 from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
-from FieldWaterUseTools.FuncBox.tfcl.models.ptavit3d.ptavit3d_dn import ptavit3d_dn       
+import FieldWaterUseTools.FuncBox.tfcl.models.ptavit3d.ptavit3d_dn     
 from FieldWaterUseTools.FuncBox.tfcl.nn.loss.ftnmt_loss import ftnmt_loss               
 from FieldWaterUseTools.FuncBox.tfcl.utils.classification_metric import Classification  
 from FieldWaterUseTools.FuncBox.FieldFuncis import *
@@ -53,7 +53,7 @@ def train(args):
                     'verbose': verbose,
                     'segm_act': 'sigmoid'}
 
-    model = ptavit3d_dn(**model_config).to(local_rank)
+    model = ptavit3d_dn.ptavit3d_dn(**model_config).to(local_rank)
     criterion = ftnmt_loss()
     criterionV = ftnmt_loss()
     criterion_features = ftnmt_loss(axis=[-3, -2, -1])
@@ -71,69 +71,72 @@ def train(args):
     valid_loader = DataLoader(dataset=valid_dataset, batch_size=batch_size,
                               shuffle=False, num_workers=3, pin_memory=True)
 
-    start = datetime.now()
-    epoch_pbar = tqdm(range(num_epochs), desc="Epochs", position=0)
+    print(len(train_dataset))
+    print(len(valid_dataset))
+
+    # start = datetime.now()
+    # epoch_pbar = tqdm(range(num_epochs), desc="Epochs", position=0)
 
 
-    for epoch in epoch_pbar:
-        tot_loss = 0
-        model.train() # train function from ptavit3d_dn(torch.nn.Module) is called
-        train_pbar = tqdm(train_loader, desc=f"Training Epoch {epoch}", position=1, leave=False)
-        for i, data in enumerate(train_pbar):
+    # for epoch in epoch_pbar:
+    #     tot_loss = 0
+    #     model.train() # train function from ptavit3d_dn(torch.nn.Module) is called
+    #     train_pbar = tqdm(train_loader, desc=f"Training Epoch {epoch}", position=1, leave=False)
+    #     for i, data in enumerate(train_pbar):
 
-            images, labels = data
-            images = images.to(local_rank, non_blocking=True)
-            labels = labels.to(local_rank, non_blocking=True)
+    #         images, labels = data
+    #         images = images.to(local_rank, non_blocking=True)
+    #         labels = labels.to(local_rank, non_blocking=True)
 
-            optimizer.zero_grad(set_to_none=True)
+    #         optimizer.zero_grad(set_to_none=True)
 
-            with autocast(device_type='cuda', dtype=torch.bfloat16):
-                preds_target = model(images)
-                loss = mtsk_loss(preds_target, labels, criterion, NClasses)
+    #         with autocast(device_type='cuda', dtype=torch.bfloat16):
+    #             preds_target = model(images)
+    #             loss = mtsk_loss(preds_target, labels, criterion, NClasses)
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+    #         scaler.scale(loss).backward()
+    #         scaler.step(optimizer)
+    #         scaler.update()
 
-            tot_loss += loss.item()
-            train_pbar.set_postfix({"Loss": f"{loss.item():.4f}"})
+    #         tot_loss += loss.item()
+    #         train_pbar.set_postfix({"Loss": f"{loss.item():.4f}"})
 
-               # for export
-            res_loss['Epoch'].append(epoch)
-            res_loss['Iteration'].append(i)
-            res_loss['Loss'].append(loss.item())
-            res_loss['Mode'].append('Train')
+    #            # for export
+    #         res_loss['Epoch'].append(epoch)
+    #         res_loss['Iteration'].append(i)
+    #         res_loss['Loss'].append(loss.item())
+    #         res_loss['Mode'].append('Train')
 
-        kwargs = monitor_epoch(model, epoch, valid_loader, res=res_loss, criterion=criterionV, NClasses=NClasses)
-        kwargs['tot_train_loss'] = tot_loss
-        # for export
-        res_mcc['Epoch'].append(epoch)
-        res_mcc['MCC'].append(kwargs['mcc'])
+    #     kwargs = monitor_epoch(model, epoch, valid_loader, res=res_loss, criterion=criterionV, NClasses=NClasses)
+    #     kwargs['tot_train_loss'] = tot_loss
+    #     # for export
+    #     res_mcc['Epoch'].append(epoch)
+    #     res_mcc['MCC'].append(kwargs['mcc'])
 
-        # check if mcc higher than ever observed
-        if kwargs['mcc'] > mcc_dum:
-            mcc_dum = kwargs['mcc']
-            conti[0] = model.state_dict()
-            conti[1] = epoch
+    #     # check if mcc higher than ever observed
+    #     if kwargs['mcc'] > mcc_dum:
+    #         mcc_dum = kwargs['mcc']
+    #         conti[0] = model.state_dict()
+    #         conti[1] = epoch
         
      
-        #res.append 
-        if verbose:
-            output_str = ', '.join(f'{k}:: {v}, |===|, ' for k, v in kwargs.items())
-            epoch_pbar.write(output_str)
+    #     #res.append 
+    #     if verbose:
+    #         output_str = ', '.join(f'{k}:: {v}, |===|, ' for k, v in kwargs.items())
+    #         epoch_pbar.write(output_str)
 
 
-    if verbose:
-        print("Training completed in: " + str(datetime.now() - start))
+    # if verbose:
+    #     print("Training completed in: " + str(datetime.now() - start))
 
     
-    torch.save(conti[0], f'{origin}fields/output/models/model_state_{db_name}_{conti[1]}_CONTROL.pth') # 
+    # torch.save(conti[0], f'{origin}fields/output/models/model_state_{db_name}_{conti[1]}_CONTROL.pth') # 
 
-    df  = pd.DataFrame(data = res_loss)
-    df.to_csv(f'{origin}fields/output/loss/loss_{db_name}_{conti[1]}.csv', sep=',',index=False)
+    # df  = pd.DataFrame(data = res_loss)
+    # df.to_csv(f'{origin}fields/output/loss/loss_{db_name}_{conti[1]}.csv', sep=',',index=False)
 
-    df  = pd.DataFrame(data = res_mcc)
-    df.to_csv(f'{origin}fields/output/loss/MCC_{db_name}_{conti[1]}.csv', sep=',',index=False)
+    # df  = pd.DataFrame(data = res_mcc)
+    # df.to_csv(f'{origin}fields/output/loss/MCC_{db_name}_{conti[1]}.csv', sep=',',index=False)
 
 
 def main():

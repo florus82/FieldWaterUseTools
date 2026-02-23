@@ -4,7 +4,7 @@ origin = '/workspace/'
 sys.path.append('/media/')
 
 from tqdm import tqdm
-from FieldWaterUseTools.FuncBox.misc import path_safe, dirfinder, get_row_col_indices
+from FieldWaterUseTools.FuncBox.Misc import path_safe, dirfinder, get_row_col_indices
 from FieldWaterUseTools.FuncBox.FieldFuncis import *
 
 

@@ -1,6 +1,12 @@
 import os
 import osgeo
+import xml.etree.ElementTree as ET
+import numpy as np
+import random
+
 from osgeo import gdal
+from datetime import datetime, timezone
+
 
 def getFilelist(originpath, ftyp, deep = False, order = True):
     '''
@@ -126,6 +132,7 @@ def commonBoundsDim(extentList):
         res[k[i]] = j(res[k[i]])
     return res
 
+
 def commonBoundsCoord(ext):
     if type(ext) is dict:
         ext = [ext]
@@ -154,6 +161,7 @@ def convertVRTpathsTOrelative(vrt_path):
     # Save the modified VRT file
     tree.write(vrt_path)
 
+
 def vrtPyramids(vrtpath):
     '''takes a vrtpath (or gdalOpened vrt) and produces pyramids'''
     if type(vrtpath) == osgeo.gdal.Dataset:
@@ -163,3 +171,106 @@ def vrtPyramids(vrtpath):
     gdal.SetConfigOption('COMPRESS_OVERVIEW', 'DEFLATE')
     Image.BuildOverviews("NEAREST", [2,4,8,16,32,64])
     del Image
+
+
+def RasterKiller(raster_path):
+    if os.path.isfile(raster_path):
+        os.remove(raster_path)
+
+
+def checkPath(path):
+    if isinstance(path, str):
+            return gdal.Open(path)
+    else:
+        return path
+
+
+def stackReader(path_to_stack, bands=False, era=False):
+    """Reads-in a raster stacks and returns a 3D numpy array of that array.
+    Optionally, a list with band names will be returned
+
+    Args:
+        path_to_stack (str): path to the stack.tif
+        bands (bool): If True, a list with band names of stack wil be returned as well. (WORKS ONLY WITH ERA5.grib files for now!!!!)
+        era (bool): If bands True and era True, the bands metadata is extracted in a different manner
+    """
+    conti = []
+    if type(path_to_stack) != osgeo.gdal.Dataset:
+        ds = gdal.Open(path_to_stack)
+    else:
+        ds = path_to_stack
+    ds = checkPath(path_to_stack)
+    bandCount = ds.RasterCount
+    if bands:
+        bandsL = []
+        if bandCount > 1:
+            for b in range(bandCount):
+                conti.append(ds.GetRasterBand(b+1).ReadAsArray())
+                if not era:
+                    bandsL.append(ds.GetRasterBand(b+1).GetDescription())
+                else:
+                    bandsL.append(datetime.fromtimestamp(int(ds.GetRasterBand(b+1).GetMetadata()['GRIB_VALID_TIME']), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'))
+            return np.dstack(conti), bandsL
+        else:
+            conti.append(ds.GetRasterBand(1).ReadAsArray())
+            if not era:
+                bandsL.append(ds.GetRasterBand(1).GetDescription())
+            else:
+                bandsL.append(datetime.fromtimestamp(int(ds.GetRasterBand(1).GetMetadata()['GRIB_VALID_TIME']), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'))
+            return np.dstack(conti), bandsL
+    else:
+        if bandCount > 1:
+            for b in range(bandCount):
+                conti.append(ds.GetRasterBand(b+1).ReadAsArray())
+            return np.dstack(conti)
+        else:
+            return ds.GetRasterBand(1).ReadAsArray()
+        
+
+def stack_tifs(input_tif_list, output_tif=False, d_type=False):
+    # Open the first raster to get geotransform, projection, and shape
+    if type(input_tif_list) != osgeo.gdal.Dataset:
+        src0 = gdal.Open(input_tif_list[0])
+    else:
+        src0 = input_tif_list
+    x_size = src0.RasterXSize
+    y_size = src0.RasterYSize
+    proj = src0.GetProjection()
+    geotrans = src0.GetGeoTransform()
+    if d_type:
+        dtype = d_type
+    else:
+        dtype = src0.GetRasterBand(1).DataType
+    num_bands = len(input_tif_list)
+
+    # Create output multi-band raster
+    if output_tif:
+        out_ds = gdal.GetDriverByName('GTiff').Create(output_tif, x_size, y_size, num_bands, dtype)
+    else:
+        out_ds = gdal.GetDriverByName('MEM').Create('', x_size, y_size, num_bands, dtype)
+    out_ds.SetProjection(proj)
+    out_ds.SetGeoTransform(geotrans)
+
+    # Write each input raster as a band
+    for i, tif_path in enumerate(input_tif_list):
+        src = gdal.Open(tif_path)
+        band_data = src.GetRasterBand(1).ReadAsArray()
+        out_ds.GetRasterBand(i + 1).WriteArray(band_data)
+
+    if output_tif:
+        out_ds.FlushCache()
+        out_ds = None  # Close file 
+    else:
+        return out_ds
+    
+
+def shuffle2Lists(list1, list2):
+   
+    paired = list(zip(list1, list2))
+    random.shuffle(paired)
+    list1_1, list2_2 = zip(*paired)
+
+    list1 = list(list1_1)
+    list2 = list(list2_2)
+
+    return list1, list2 

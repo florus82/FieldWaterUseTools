@@ -10,17 +10,21 @@ import pandas as pd
 from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
-from FieldWaterUseTools.FuncBox.tfcl.models.ptavit3d.ptavit3d_dn import ptavit3d_dn       
+import FieldWaterUseTools.FuncBox.tfcl.models.ptavit3d.ptavit3d_dn
 from FieldWaterUseTools.FuncBox.tfcl.nn.loss.ftnmt_loss import ftnmt_loss               
 from FieldWaterUseTools.FuncBox.FieldFuncis import *
+from FieldWaterUseTools.FuncBox.Misc import shuffle2Lists
 
 
+dilate = 'False'
+overlap = 'with'
 # setfine-tune dataset
-db_name = 'IACS_dilated_border_edgeCutted_RGB_NDVI_exclude_True_with_overlap'
+db_name = f"IACS_dilate_{dilate}_BorderEdgeCutted_RGB_NDVI_exclude_True_{overlap}_overlap"
+# borderedgecutted -_> false 0 chips at edge are gone
 
 # set model that is fine-tuned
 model_check = 'AI4_RGB_exclude_True_38'
-
+random.seed(42)
 
 # freezing strategies
 
@@ -106,7 +110,7 @@ def train(args):
                     'verbose': verbose,
                     'segm_act': 'sigmoid'}
 
-    model = ptavit3d_dn(**model_config).to(local_rank)
+    model = ptavit3d_dn.ptavit3d_dn(**model_config).to(local_rank)
 
     # set checkpoint
     checkpoint = torch.load(f'{origin}fields/output/models/model_state_{model_check}.pth',
@@ -150,14 +154,27 @@ def train(args):
     )
 
     scaler = GradScaler()
+    train_valid_split = 0.75
 
-    train_dataset = AI4BPatchDataset(path_to_data=f"{origin}fields/Fine_tune_dilate_True/", patch_size=128, stride=64, mode='train')
+    train_ds_path = f"{origin}fields/Fine_dilate_{dilate}/"
+    imgs_list = getFilelist(train_ds_path, '.nc', deep=True)
+    masks_list = getFilelist(train_ds_path, '.tif', deep=True)
+
+    listOfimgs, listOfmasks = shuffle2Lists(imgs_list, masks_list)
+
+    train_dataset = AI4BPatchDataset(list_of_imgs=listOfimgs,list_of__masks=listOfmasks, #path_to_data=f"{origin}fields/Fine_dilate_{dilate}/", \
+                                     patch_size=128, stride=64, transform=TrainingTransformS2(), 
+                                     mode='train', ntrain=train_valid_split)
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size,
-                              shuffle=False, num_workers=3, pin_memory=True, persistent_workers=True)
+                              shuffle=False, num_workers=5, pin_memory=True, persistent_workers=True)
 
-    valid_dataset = AI4BPatchDataset(path_to_data=f"{origin}fields/Fine_tune_dilate_True/", patch_size=128, stride=64, mode='valid')
+    valid_dataset = AI4BDataset(list_of_imgs=listOfimgs,list_of__masks=listOfmasks, #path_to_data=f"{origin}fields/Fine_dilate_{dilate}/", \
+                                  mode='valid', ntrain=train_valid_split)
     valid_loader = DataLoader(dataset=valid_dataset, batch_size=batch_size,
-                              shuffle=False, num_workers=3, pin_memory=True, persistent_workers=True)
+                              shuffle=False, num_workers=5, pin_memory=True, persistent_workers=True)
+
+    print(len(train_dataset))
+    print(len(valid_dataset))
 
     start = datetime.now()
     epoch_pbar = tqdm(range(num_epochs), desc="Epochs", position=0)
@@ -226,7 +243,7 @@ def train(args):
 def main():
     class Args:
         def __init__(self):
-            self.epochs = 10
+            self.epochs = 50
             self.batch_size = 3
 
     args = Args()

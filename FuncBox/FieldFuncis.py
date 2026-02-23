@@ -16,7 +16,7 @@ import os
 import random
 from FieldWaterUseTools.FuncBox.tfcl.utils.classification_metric import Classification
 from FieldWaterUseTools.FuncBox.tfcl.models.ptavit3d import ptavit3d_dn
-from FieldWaterUseTools.FuncBox.misc import getFilelist, sortListwithOtherlist, path_safe, getExtentRas, commonBoundsDim, \
+from FieldWaterUseTools.FuncBox.Misc import getFilelist, sortListwithOtherlist, path_safe, getExtentRas, commonBoundsDim, \
     commonBoundsCoord, convertVRTpathsTOrelative, vrtPyramids
 
 
@@ -100,36 +100,30 @@ class TrainingTransformS2(object):
 
 
 class AI4BDataset(torch.utils.data.Dataset):
-    def __init__(self, path_to_data=r'/path/to/AI4BOUNDARIES/sentinel2/',transform=TrainingTransformS2(), mode='train', ntrain=0.9):
+    def __init__(self, list_of_imgs, list_of__masks, transform=TrainingTransformS2(), mode='train', ntrain=0.9): #path_to_data=r'/path/to/AI4BOUNDARIES/sentinel2/'
         
-        self.flnames_s2_img = getFilelist(path_to_data, '.nc', deep=True, order=True)
-        self.flnames_s2_mask = getFilelist(path_to_data, '.tif', deep=True, order=True)
-
+        self.flnames_s2_img = list_of_imgs # getFilelist(path_to_data, '.nc', deep=True, order=True)
+        self.flnames_s2_mask = list_of__masks # getFilelist(path_to_data, '.tif', deep=True, order=True)
 
         assert len(self.flnames_s2_img) == len(self.flnames_s2_mask), ValueError("Some problem, the masks and images are not in the same numbers, aborting")
         
         tlen = len(self.flnames_s2_img)
         
-        # Make a reproducible random split
-        indices = list(range(tlen))
-        random.seed(42)   # ensure reproducibility
-        random.shuffle(indices)
-        split_idx = int(ntrain * tlen)
-
-        if mode == 'train':
-            selected_idx = indices[:split_idx]
-        elif mode == 'valid':
-            selected_idx = indices[split_idx:]
+        if mode=='train':
+            self.flnames_s2_img = self.flnames_s2_img[:int(ntrain*tlen)]
+            self.flnames_s2_mask = self.flnames_s2_mask[:int(ntrain*tlen)]
+        elif mode=='valid':
+            self.flnames_s2_img = self.flnames_s2_img[int(ntrain*tlen):]
+            self.flnames_s2_mask = self.flnames_s2_mask[int(ntrain*tlen):]
         else:
             raise ValueError("Cannot undertand mode::{}, should be either train or valid, aborting...".format(mode))
         
-        # Select files based on random indices
-        self.flnames_s2_img = [self.flnames_s2_img[i] for i in selected_idx]
-        self.flnames_s2_mask = [self.flnames_s2_mask[i] for i in selected_idx]
+
         self.transform=transform                                                              
     
     # Helper function to read nc to raster 
     def ds2rstr(self,tname):
+
         variables2use=['B2','B3','B4','B8'] # ,'NDVI']
         ds = xr.open_dataset(tname)
         ds_np = np.concatenate([ds[var].values[None] for var in variables2use],0)
@@ -141,6 +135,7 @@ class AI4BDataset(torch.utils.data.Dataset):
 
     
     def __getitem__(self,idx):
+
         tname_img = self.flnames_s2_img[idx]
         tname_mask = self.flnames_s2_mask[idx]
         
@@ -157,7 +152,7 @@ class AI4BDataset(torch.utils.data.Dataset):
 
 
 class AI4BPatchDataset(AI4BDataset):
-    def __init__(self, path_to_data, patch_size=128, stride=64, transform=None, mode='train', ntrain=0.9):
+    def __init__(self, list_of_imgs, list_of__masks, patch_size=128, stride=64, transform=None, mode='train', ntrain=0.9): # path_to_data
         """
         path_to_data: root folder with images and masks
         patch_size: size of extracted patches
@@ -166,7 +161,7 @@ class AI4BPatchDataset(AI4BDataset):
         mode: 'train' or 'valid'
         ntrain: fraction of images for training
         """
-        super().__init__(path_to_data=path_to_data,
+        super().__init__(list_of_imgs=list_of_imgs, list_of__masks=list_of__masks,#path_to_data=path_to_data,
                                 transform=None,  # IMPORTANT: disable parent transform
                                 mode=mode,
                                 ntrain=ntrain)
@@ -174,55 +169,102 @@ class AI4BPatchDataset(AI4BDataset):
         self.patch_size = patch_size
         self.stride = stride
         self.transform = transform
+        self.mode = mode
+
+        self.image_patch_cache = []
+        self.mask_patch_cache = []
 
         # Precompute patch index map
         self.patch_index_map = []
 
-        for img_idx, (img_path, mask_path) in enumerate(
-                zip(self.flnames_s2_img, self.flnames_s2_mask)):
+        if self.mode == 'train':
+            for img_idx, img_path in enumerate(self.flnames_s2_img):
 
-            ds = xr.open_dataset(img_path)
-            shape = ds['B2'].shape
+                ds = xr.open_dataset(img_path)
+                shape = ds['B2'].shape
 
-            # Handle (T,H,W) or (H,W)
-            if len(shape) == 3:
-                _, H, W = shape
-            else:
-                H, W = shape
+                # Handle (T,H,W) or (H,W)
+                if len(shape) == 3:
+                    _, H, W = shape
+                else:
+                    H, W = shape
 
-            ds.close()
+                ds.close()
 
-            for i in range(0, H - patch_size + 1, stride):
-                for j in range(0, W - patch_size + 1, stride):
-                    self.patch_index_map.append((img_idx, i, j))
+                for i in range(0, H - patch_size + 1, stride):
+                    for j in range(0, W - patch_size + 1, stride):
+                        self.patch_index_map.append((img_idx, i, j))
 
+        else:
+            raise Warning('no overlap produced')
+        
+        # Cache
+        self._cached_img_idx = None
+        self._cached_img = None
+        self._cached_mask = None
+
+        
     def __len__(self):
-        return len(self.patch_index_map)
-
+        if self.mode == 'train':
+            return len(self.patch_index_map)
+        else:
+            return len(self.flnames_s2_img)
+        
     def __getitem__(self, idx):
 
-        img_idx, row, col = self.patch_index_map[idx]
+        if self.mode == 'train':
+            img_idx, row, col = self.patch_index_map[idx]
+        else:
+            img_idx = idx
 
-        tname_img = self.flnames_s2_img[img_idx]
-        tname_mask = self.flnames_s2_mask[img_idx]
+        # Only reload if image changed
+        if img_idx != self._cached_img_idx:
 
-        # Load full image
-        timg = self.ds2rstr(tname_img)           # (C, T, H, W)
-        tmask = self.read_mask(tname_mask)       # (H, W, bands)
+            tname_img = self.flnames_s2_img[img_idx]
+            tname_mask = self.flnames_s2_mask[img_idx]
+
+            self._cached_img = self.ds2rstr(tname_img)
+            self._cached_mask = self.read_mask(tname_mask)
+
+            self._cached_img_idx = img_idx
+
+        timg = self._cached_img
+        tmask = self._cached_mask
+
+        if self.mode == 'train':
+            timg = timg[:, :, row:row+self.patch_size, col:col+self.patch_size]
+            tmask = tmask[:, row:row+self.patch_size, col:col+self.patch_size]
+
+            if self.transform is not None:
+                timg, tmask = self.transform(timg, tmask)
+
+        return timg, tmask
+    # def __getitem__(self, idx):
+    #     if self.mode == 'train':
+    #         img_idx, row, col = self.patch_index_map[idx]
+    #     else:img_idx = idx
+
+    #     tname_img = self.flnames_s2_img[img_idx]
+    #     tname_mask = self.flnames_s2_mask[img_idx]
+
+    #     # Load full image
+    #     timg = self.ds2rstr(tname_img)           # (C, T, H, W)
+    #     tmask = self.read_mask(tname_mask)       # (H, W, bands)
 
 
-        # Slice ONE patch
-        timg_patch = timg[:, :, row:row+self.patch_size, col:col+self.patch_size]
+    #     # Slice ONE patch
+    #     if self.mode == 'train':
+    #         timg_patch = timg[:, :, row:row+self.patch_size, col:col+self.patch_size]
+    #         tmask_patch = tmask[:, row:row+self.patch_size, col:col+self.patch_size]
 
-        tmask_patch = tmask[:, row:row+self.patch_size, col:col+self.patch_size]
-
-        # Apply augmentation (ONLY here)
-        if self.transform is not None:
-            timg_patch, tmask_patch = self.transform(timg_patch,
-                                                     tmask_patch)
-
-        return timg_patch, tmask_patch
-
+    #         # Apply augmentation (ONLY here)
+    #         if self.transform is not None:
+    
+    #             timg_patch, tmask_patch = self.transform(timg_patch,
+    #                                                     tmask_patch)
+    #         else:
+            
+    #     return timg_patch, tmask_patch
 
 def mtsk_loss(preds, labels, criterion, NClasses=1):                   
     # Multitasking loss,    segmentation / boundaries/ distance     
