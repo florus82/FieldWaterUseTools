@@ -10,8 +10,8 @@ import pandas as pd
 from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
-import FieldWaterUseTools.FuncBox.tfcl.models.ptavit3d.ptavit3d_dn
-from FieldWaterUseTools.FuncBox.tfcl.nn.loss.ftnmt_loss import ftnmt_loss               
+import FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d.ptavit3d_dn
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.loss.ftnmt_loss import ftnmt_loss               
 from FieldWaterUseTools.FuncBox.FieldFuncis import *
 from FieldWaterUseTools.FuncBox.Misc import shuffle2Lists
 

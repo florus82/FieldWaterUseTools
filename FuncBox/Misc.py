@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import random
 
-from osgeo import gdal
+from osgeo import gdal, osr
 from datetime import datetime, timezone
 
 
@@ -274,3 +274,305 @@ def shuffle2Lists(list1, list2):
     list2 = list(list2_2)
 
     return list1, list2 
+
+
+def is_leap_year(year):
+    return (year % 4 == 0) and (year % 100 != 0 or year % 400 == 0)
+
+
+def warp_raster_to_reference(source_path, reference_path, output_path, resampling='bilinear', keepRes=False, dtype=None):
+    '''
+    source_path: the raster to be warped
+    reference_path: the raster to which will be warped
+    output_path: here the warped raster will be stored; if MEM is used, the warped raster will be returned as memory object
+    resampling: method to do resampling, e.g. bilinear, cubic, nearest
+    keepRes: if set to true the warp will be done without changing the resolution of the raster at source_path to that of reference_path; if set to an integer,
+    the pixel size of reference_path will be divided by that integer to gain a new pixel size 
+    dtype (gdal.GDT_): if None, the dtype from source_path will be used
+    '''
+
+    # Open reference raster
+    ref_ds = checkPath(reference_path)
+    ref_proj = ref_ds.GetProjection()
+    ref_gt = ref_ds.GetGeoTransform()
+    x_size = ref_ds.RasterXSize
+    y_size = ref_ds.RasterYSize
+
+    # Extract pixel size
+    ref_x_res = ref_gt[1]
+    ref_y_res = -ref_gt[5]  
+
+    # Get bounds: xmin, ymin, xmax, ymax
+    xmin = ref_gt[0]
+    ymax = ref_gt[3]
+    xmax = xmin + ref_x_res * x_size
+    ymin = ymax - ref_y_res * y_size
+
+    # If dtype not given, use dtype from source raster
+    if dtype is None:
+        src_ds = checkPath(source_path)
+        dtype = src_ds.GetRasterBand(1).DataType  # matches gdal.GDT_* constants
+        src_ds = None  # close
+
+    if isinstance(keepRes, bool) and keepRes:
+        src_ds = checkPath(source_path)
+        src_gt = src_ds.GetGeoTransform()
+        src_proj = osr.SpatialReference(wkt=src_ds.GetProjection())
+
+        ref_proj = osr.SpatialReference(wkt=ref_ds.GetProjection())
+
+        transform = osr.CoordinateTransformation(src_proj, ref_proj)
+
+        # Pixel corners in source CRS
+        px_width = src_gt[1]
+        px_height = src_gt[5]  # usually negative
+
+        # Point (0,0)
+        x0, y0, _ = transform.TransformPoint(src_gt[0], src_gt[3])
+        # Point (1 pixel right)
+        x1, y1, _ = transform.TransformPoint(src_gt[0] + px_width, src_gt[3])
+        # Point (1 pixel down)
+        x2, y2, _ = transform.TransformPoint(src_gt[0], src_gt[3] + px_height)
+
+        # Resolution in target CRS
+        aim_x_res = ((x1 - x0)**2 + (y1 - y0)**2) ** 0.5
+        aim_y_res = ((x2 - x0)**2 + (y2 - y0)**2) ** 0.5
+
+    elif isinstance(keepRes, int) and not isinstance(keepRes, bool) and keepRes > 0:
+        aim_x_res = ref_x_res / keepRes
+        aim_y_res = ref_y_res / keepRes
+
+    else:
+        aim_x_res = ref_x_res
+        aim_y_res = ref_y_res
+
+    out_format = 'MEM' if output_path == 'MEM' else 'GTiff'
+    # Set up warp options
+    warp_options = gdal.WarpOptions(
+        format=out_format,
+        dstSRS=ref_proj,
+        outputBounds=(xmin, ymin, xmax, ymax),
+        xRes=aim_x_res,
+        yRes=aim_y_res,
+        resampleAlg=resampling,
+        targetAlignedPixels=False,
+        outputType=dtype
+        # srcNodata=noDat,     
+        # dstNodata=-999
+    )
+
+
+    # Perform reprojection and resampling
+    warped_ds = gdal.Warp('', source_path, options=warp_options) if out_format == 'MEM' else gdal.Warp(output_path, source_path, options=warp_options)
+
+
+
+    # gdal.Translate(
+    #     output_path,
+    #     temp_path,
+    #     projWin=(xmin, ymax, xmax, ymin)
+    # )
+    # os.remove(temp_path)
+
+    if output_path == 'MEM':
+        return warped_ds
+    else:
+        print(f"Raster warped and saved to: {output_path}")
+
+
+def npTOdisk(arr, reference_path, outPath, bands = False, bandnames = False, noData = False, d_type = False):
+    """exports a numpy array to a tif that is stored on disk
+
+    Args:
+        arr (numpy array): the array to be exported
+        reference_path (str): path to the reference tif. The extent and dimensions must fit!!!!
+        outPath (_str): path to exported tif on disk
+    """
+    ref_ds = checkPath(reference_path)
+    ref_band = ref_ds.GetRasterBand(1)
+    if not bands:
+        bands = ref_ds.RasterCount
+    if not d_type:
+        out_ds = gdal.GetDriverByName('GTiff').Create(outPath, ref_ds.RasterXSize, ref_ds.RasterYSize, bands, ref_band.DataType)
+    else:
+        out_ds = gdal.GetDriverByName('GTiff').Create(outPath, ref_ds.RasterXSize, ref_ds.RasterYSize, bands, d_type)
+    out_ds.SetGeoTransform(ref_ds.GetGeoTransform())
+    out_ds.SetProjection(ref_ds.GetProjection())
+    if bands == 1:
+        out_ds.GetRasterBand(1).WriteArray(arr)
+        if bandnames:
+            out_ds.GetRasterBand(1).SetDescription(bandnames)
+        if noData is not False:
+            out_ds.GetRasterBand(1).SetNoDataValue(noData)
+    else:
+        for i in range(bands):
+            out_ds.GetRasterBand(i+1).WriteArray(arr[:,:,i])
+            if bandnames:
+                out_ds.GetRasterBand(i+1).SetDescription(str(bandnames[i]))
+            if noData is not False:
+                out_ds.GetRasterBand(i+1).SetNoDataValue(noData)
+    out_ds.FlushCache()
+
+
+def getBandNames(rasterstack):
+    bands = []
+    ds = gdal.Open(rasterstack)
+    numberBands = ds.RasterCount
+    for i in range(numberBands):
+        bands.append(ds.GetRasterBand(i+1).GetDescription())
+    return bands
+
+
+def makeTif_np_to_matching_tif(array, tif_path, path_to_file_out, noData = None, gdalType = None, bands=1):
+    '''
+    exports an np.array to a tif, based on a tif that has the same extent. Probably, the np.array is a manipulation of that tif
+    array: the numpy array
+    tif_path: path to the tif from which geoinformation will be extracted
+    path_to_file_out: where the new tif should be stored
+    noData = a no data value can be assigned to the exported tif
+    gdaType = a different data type can be set here, otherwise, the one from hte tif at tif_path will be used
+    bands = default single band raster, provide the integer of bands to export as stack
+    '''
+    ds = gdal.Open(tif_path)
+    gtiff_driver = gdal.GetDriverByName('GTiff')
+    no_data = ds.GetRasterBand(1).GetNoDataValue()
+    if gdalType == None:
+        dtypi = ds.GetRasterBand(1).DataType
+    else:
+        dtypi = gdalType
+
+    out_ds = gtiff_driver.Create(path_to_file_out, ds.RasterXSize, ds.RasterYSize, bands, dtypi)
+    out_ds.SetGeoTransform(ds.GetGeoTransform())
+    out_ds.SetProjection(ds.GetProjection())
+    if bands == 1:
+        out_ds.GetRasterBand(1).WriteArray(array)
+        if noData != None:
+            out_ds.GetRasterBand(1).SetNoDataValue(noData)
+        else:
+            if no_data is not None:
+                out_ds.GetRasterBand(1).SetNoDataValue(no_data)
+    else:
+        for b in range(bands):
+            out_ds.GetRasterBand(b + 1).WriteArray(array[:,:,b])
+        if noData != None:
+            for b in range(bands):
+                out_ds.GetRasterBand(b + 1).SetNoDataValue(noData)
+        else:
+            if no_data is not None:
+                out_ds.GetRasterBand(b + 1).SetNoDataValue(no_data)
+
+    del out_ds
+
+
+def maskVRT(vrtPath, maskArray, suffix):
+    """Opens a vrt and masks it with a binary array of the same dimensions
+
+    Args:
+        vrtPath (str): path to the vrt
+        maskArray (np.array): binary np array, where 1 == valid and 0 == maks
+    """
+    ds = gdal.Open(vrtPath)
+    b = []
+    for band in range(ds.RasterCount):
+        b.append(ds.GetRasterBand(band + 1).ReadAsArray() * maskArray)
+    masked_arr =  np.dstack(b)
+    makeTif_np_to_matching_tif(masked_arr, vrtPath, f"{vrtPath.split('.')[0]}{suffix}.tif", bands=len(b))
+
+def maskVRT_water(vrtPath, colorlist):
+    """OLD!!!!Opens a vrt and applies dirty water mask --> slope = NA and aspect = 180
+       NOW: a 5% threshold is applied on BNIR band
+
+    Args:
+        vrtPath (str): path to the vrt
+        colorlist: the order in which the s2 bands are delivered. the bands of cube must start with them
+    """
+    ds = gdal.Open(vrtPath)
+    b = []
+    for band in range(ds.RasterCount):
+        b.append(ds.GetRasterBand(band + 1).ReadAsArray())
+    arr =  np.dstack(b)
+    # mask = np.logical_and(arr[:,:,10] < 0.000000001, arr[:,:,11] == 180)
+    mask = arr[:,:,colorlist.index('BNR')] < 500 # BNIR below 5%
+    masked_arr = np.where(mask[:,:,None],np.nan, arr)
+    makeTif_np_to_matching_tif(masked_arr, vrtPath, f"{vrtPath.split('.')[0]}_watermask.tif", gdalType=gdal.GDT_Float32, bands=len(b))
+
+
+def stackReader(path_to_stack, bands=False, era=False):
+    """Reads-in a raster stacks and returns a 3D numpy array of that array.
+    Optionally, a list with band names will be returned
+
+    Args:
+        path_to_stack (str): path to the stack.tif
+        bands (bool): If True, a list with band names of stack wil be returned as well. (WORKS ONLY WITH ERA5.grib files for now!!!!)
+        era (bool): If bands True and era True, the bands metadata is extracted in a different manner
+    """
+    conti = []
+    if type(path_to_stack) != osgeo.gdal.Dataset:
+        ds = gdal.Open(path_to_stack)
+    else:
+        ds = path_to_stack
+    ds = checkPath(path_to_stack)
+    bandCount = ds.RasterCount
+    if bands:
+        bandsL = []
+        if bandCount > 1:
+            for b in range(bandCount):
+                conti.append(ds.GetRasterBand(b+1).ReadAsArray())
+                if not era:
+                    bandsL.append(ds.GetRasterBand(b+1).GetDescription())
+                else:
+                    bandsL.append(datetime.fromtimestamp(int(ds.GetRasterBand(b+1).GetMetadata()['GRIB_VALID_TIME']), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'))
+            return np.dstack(conti), bandsL
+        else:
+            conti.append(ds.GetRasterBand(1).ReadAsArray())
+            if not era:
+                bandsL.append(ds.GetRasterBand(1).GetDescription())
+            else:
+                bandsL.append(datetime.fromtimestamp(int(ds.GetRasterBand(1).GetMetadata()['GRIB_VALID_TIME']), tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S'))
+            return np.dstack(conti), bandsL
+    else:
+        if bandCount > 1:
+            for b in range(bandCount):
+                conti.append(ds.GetRasterBand(b+1).ReadAsArray())
+            return np.dstack(conti)
+        else:
+            return ds.GetRasterBand(1).ReadAsArray()
+        
+
+def export_intermediate_products(row_col_start, intermediate_aray, dummy_gt, dummy_proj, folder_out, filename, noData=None, typ='int', comp=False):
+    '''
+    intermediate_aray: array to be exported
+    dummy_gt + dummy_proj: GetGeotransform() and GetProjection from a gdal.Open object that contains desired geoinformation
+    folder_out: path to FOLDER, where intermediate product will be stored
+    noData = a no data value can be assigned to the exported tif
+    comp (bool): If True, tiff uses options=['COMPRESS=DEFLATE', 'TILED=YES']
+    '''
+    if not folder_out.endswith('/'):
+        folder_out = folder_out + '/'
+
+    row_start = int(row_col_start.split('_')[0])
+    col_start = int(row_col_start.split('_')[1])
+    
+    typi = gdal.GDT_Int32
+    if typ == 'float':
+        typi = gdal.GDT_Float32
+    if comp:
+        out_ds = gdal.GetDriverByName('GTiff').Create(f'{folder_out}{filename}', 
+                                                    intermediate_aray.shape[1], intermediate_aray.shape[0], 1, typi,
+                                                    options=['COMPRESS=DEFLATE', 'TILED=YES'])
+    else:    
+        out_ds = gdal.GetDriverByName('GTiff').Create(f'{folder_out}{filename}', 
+                                                    intermediate_aray.shape[1], intermediate_aray.shape[0], 1, typi)
+    # change the Geotransform for each chip
+    geotf = list(dummy_gt)
+    # get column and rows from filenames
+    geotf[0] = geotf[0] + geotf[1] * col_start
+    geotf[3] = geotf[3] + geotf[5] * row_start
+    #print(f'X:{geoTF[0]}  Y:{geoTF[3]}  AT {file}')
+    out_ds.SetGeoTransform(tuple(geotf))
+    out_ds.SetProjection(dummy_proj)
+                
+    out_ds.GetRasterBand(1).WriteArray(intermediate_aray)
+    if noData != None:
+        out_ds.GetRasterBand(1).SetNoDataValue(noData)
+    del out_ds

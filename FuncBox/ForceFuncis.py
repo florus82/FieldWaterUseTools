@@ -1,6 +1,7 @@
 from osgeo import gdal
 import os
 import numpy as np
+import re
 from FieldWaterUseTools.FuncBox.Misc import getFilelist, RasterKiller, vrtPyramids, convertVRTpathsTOrelative, sortListwithOtherlist
 
 
@@ -109,3 +110,44 @@ def force_to_vrt(list_of_forcefiles, ordered_forcetiles, vrt_out_path, pyramids=
             print('VRT created with pyramids')
     else:
         print('Vrt might already exist - please check!!')
+
+
+def check_forceTSI_compositionDates(listOfFORCEoutput):
+    """_summary_
+
+    Args:
+        listOfFORCEoutput (list_of_strings): list with paths to tif files from FORCE TSI output
+    """
+    fatal_check = 0
+    date_list = []
+    tiles = get_forceTSI_output_Tiles(listOfFORCEoutput)
+    for tile in tiles:
+        date_list.append((get_forceTSI_output_DOYS([file for file in listOfFORCEoutput if tile in file])))
+    for i in range(0,len(date_list)-1):
+        if date_list[i] == date_list[i + 1]:
+            continue
+        else:
+            fatal_check = 1
+    if fatal_check:
+        print('the doys of composites across tiles is not equal - Better check!!!!! - No date list returned!!!!!!')
+    else:
+        print('all dates of composites are the same :)')
+        return date_list[0]
+    
+
+def get_forceTSI_output_DOYS(listOfFORCEoutput):
+    '''
+    Will return a sorted list of unique DOYs in format YYYYMMDD. Please note, that this only works with files in FORCE naming convention, where
+    the date will be used that is at the end of the filename (YYYYMMDD.tif)
+    listOfFORCEoutput: list with paths to tif files from FORCE TSI output
+    '''
+    return sorted(list(set([re.search(r'(\d{4})(\d{2})(\d{2})\.tif$', file)[0].split('.tif')[0] for file in listOfFORCEoutput])))
+
+def get_forceTSI_output_Tiles(listOfFORCEoutput):
+    """
+    Will return a sorted list of unique Tiles Ids(e.g. 'X0057_Y0044')
+
+    Args:
+        listOfFORCEoutput (list_of_strings): list with paths to tif files from FORCE TSI output
+    """
+    return sorted(list(set([re.search(r'X\d{4}_Y\d{4}',file)[0] for file in listOfFORCEoutput])))

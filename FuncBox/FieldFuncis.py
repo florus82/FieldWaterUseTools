@@ -14,8 +14,8 @@ import xarray as xr
 from osgeo import gdal
 import os
 import random
-from FieldWaterUseTools.FuncBox.tfcl.utils.classification_metric import Classification
-from FieldWaterUseTools.FuncBox.tfcl.models.ptavit3d import ptavit3d_dn
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.utils.classification_metric import Classification
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d import ptavit3d_dn
 from FieldWaterUseTools.FuncBox.Misc import getFilelist, sortListwithOtherlist, path_safe, getExtentRas, commonBoundsDim, \
     commonBoundsCoord, convertVRTpathsTOrelative, vrtPyramids
 
