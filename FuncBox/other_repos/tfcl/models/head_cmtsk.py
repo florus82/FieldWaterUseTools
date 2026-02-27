@@ -1,8 +1,8 @@
 import torch
 
-from tfcl.nn.layers.scale import *
-from tfcl.nn.activations.sigmoid_crisp import *
-from tfcl.nn.layers.conv2Dnormed import *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.layers.scale import *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.activations.sigmoid_crisp import *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.layers.conv2Dnormed import *
 
 
 ######__all__ = ['head_cmtsk','head_cmtsk_lstm']

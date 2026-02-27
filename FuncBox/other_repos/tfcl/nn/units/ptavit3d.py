@@ -154,7 +154,7 @@ def MBConv3D(
 
 
 
-from tfcl.nn.layers.patchattention_thw import  *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.layers.patchattention_thw import  *
 class PTAttention3DTCHW(nn.Module):
     def __init__(
         self,

@@ -1,5 +1,5 @@
 import torch
-from tfcl.utils.get_norm import * 
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.utils.get_norm import * 
 
 
 class Conv3DNormed(torch.nn.Module):

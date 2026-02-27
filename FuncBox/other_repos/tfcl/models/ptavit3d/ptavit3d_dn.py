@@ -1,8 +1,6 @@
-import sys
-sys.path.append(r'../../../')
 import torch
-from tfcl.models.ptavit3d.ptavit3d_dn_features import *
-from tfcl.models.head_cmtsk import head_cmtsk 
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d.ptavit3d_dn_features import *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.models.head_cmtsk import head_cmtsk 
 
 class Lambda(nn.Module):
     def __init__(self,  fn):

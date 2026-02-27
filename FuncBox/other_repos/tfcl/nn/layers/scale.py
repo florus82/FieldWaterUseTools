@@ -1,6 +1,6 @@
 import torch
-from tfcl.nn.layers.conv2Dnormed import *
-from tfcl.nn.layers.conv3Dnormed import *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.layers.conv2Dnormed import *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.layers.conv3Dnormed import *
 
 
 

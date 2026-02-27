@@ -1,29 +1,30 @@
 # Overview Evapotranspiration estimation
 
 ## Input Data
-### Spatial extent: Germany --> we use a tiling system at the moment, that is sth. for discussion
+### Spatial extent: Germany, e.g. the bounding box used in ipynb, or bbox = [5.592041, 47.129951, 15.26001, 55.09723] 
+### --> we use a tiling system at the moment, that is sth. for discussion
 
-- Sentinel-3: LST, ViewingZenithAngle, ViewingAzimuthAngle
+- Sentinel-3: LST with acquisition time, ViewingZenithAngle, ViewingAzimuthAngle
 
 - Sentinel-2 9-day composites of bands [2,3,4,5,6,7,8,8A,11,12] --> ['BLU', 'GRN', 'RED', 'BNR', 'NIR', 'RE1', 'RE2', 'RE3',  'SW1', 'SW2'] (int)
+ --> the filename of each composite must contain the date of the middle of the 9-day compositing time frame, e.g. composite of observations from 2017-12-01 
+      until 2017-12-09 --> filename xxx_20171205.tif. Furthermore, if composites are stacks of the bands, the color (list above) should be present in the bandname
 
 - ERA 5 datasets: ["2m_dewpoint_temperature", "2m_temperature", "surface_pressure", "100m_u_component_of_wind", "100m_v_component_of_wind", 
                         "total_column_water_vapour", "geopotential", "surface_solar_radiation_downward_clear_sky"]
-
                         all hourly from 2018-2025 (geopotential only one image)
 
 - DEM: ["COPERNICUS_30"] and derived slope, aspect (float)
-- Latitude and Longitude rasters @30m (float)
-
-- Thuenen agricultural mask for Germany for 2018-2025 (https://eodata.thuenen.de/collections/crop-type-map-latest)
+- Latitude and Longitude rasters @20m (float) (I would create them after we settled on tiling scheme)
+- Thuenen agricultural mask for Germany for 2018-2025 (https://eodata.thuenen.de/collections/crop-type-map-latest); already downloaded, have to be 'warped' to Sentinel-2 (preproccesing)
 
 
 ## Preprocessing
-
-- Sentinel-3 compositing
+- Sentinel-2, DEM (+derivates), Lat, Long, Thuenen all coregistered (warped), same spatial extent and resolution (20m)
+- Sentinel-3 compositing (0° threshold, VZA, acquisition time, 2m ERA-5 air temperature)
 - Sentinel-3 sharpening (maybe including daily incidence calculation)
 - maybe add biophysical parameter derivation
-- Sentinel-2, DEM (+derivates), Lat, Long, Thuenen all coregistered (warped)
+
 - Sentinel-3 will match other rasters after sharpening
 
 ## Apply model

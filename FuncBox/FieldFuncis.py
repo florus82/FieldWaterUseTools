@@ -2,22 +2,28 @@
 # this repo is connected to the AI4boudnaries dataset https://doi.org/10.5194/essd-15-317-2023
 
 # load functions and packages
+
 import torch
 import pickle
+import time
 from tqdm import tqdm
 import albumentations as A
 from albumentations.core.transforms_interface import  ImageOnlyTransform
 from torch.amp import autocast
+from skimage import measure
+import higra as hg
 import numpy as np
+import pandas as pd
 import rasterio
 import xarray as xr
 from osgeo import gdal
+gdal.DontUseExceptions()
 import os
 import random
 from FieldWaterUseTools.FuncBox.other_repos.tfcl.utils.classification_metric import Classification
-from FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d import ptavit3d_dn
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d.ptavit3d_dn import ptavit3d_dn
 from FieldWaterUseTools.FuncBox.Misc import getFilelist, sortListwithOtherlist, path_safe, getExtentRas, commonBoundsDim, \
-    commonBoundsCoord, convertVRTpathsTOrelative, vrtPyramids
+    commonBoundsCoord, convertVRTpathsTOrelative, vrtPyramids, export_intermediate_products
 
 
 class AI4BNormal_S2(object):
@@ -370,12 +376,13 @@ def predict_on_GPU(path_to_model, list_of_row_col_indices, npdstack, batch_size=
                     'segm_act': 'sigmoid'}
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    
     model = ptavit3d_dn(**model_config).to(device)
     model.load_state_dict(torch.load(path_to_model, map_location=device))
     model.eval()
    
     row_start, row_end, col_start, col_end = list_of_row_col_indices
-
+    starttime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
     preds = []
     patches = []
     # cut np array into patches
@@ -383,17 +390,22 @@ def predict_on_GPU(path_to_model, list_of_row_col_indices, npdstack, batch_size=
         for j in range(len(col_end)):
             patches.append(npdstack[np.newaxis, :, :, row_start[i]:row_end[i], col_start[j]:col_end[j]])
 
+   
     # inference
     with torch.inference_mode():
-        with torch.cuda.amp.autocast(device_type='cuda', dtype=torch.bfloat16):
+        with torch.amp.autocast("cuda", dtype=torch.bfloat16):
             for k in range(0, len(patches), batch_size):
                 batch_np = np.concatenate(patches[k:k+batch_size], axis=0)
-                batch_tensor = torch.from_numpy(batch_np).float().to(device, non_blocking=True)
+                batch_tensor = torch.from_numpy(batch_np).to(device, non_blocking=True)
                 batch_pred = model(batch_tensor)
                 preds.append(batch_pred.cpu())  
 
     preds = torch.cat(preds, dim=0).numpy()
 
+    endtime = time.strftime("%a, %d %b %Y %H:%M:%S", time.localtime())
+
+    print("start : " + starttime)
+    print("end: " + endtime)
     # image = torch.tensor()
     # image = image.to(torch.float)
     # image = image.to(device)  # Move image to the correct device
@@ -411,14 +423,11 @@ def predict_on_GPU(path_to_model, list_of_row_col_indices, npdstack, batch_size=
     if temp_path:
         with open(path_safe(f'{temp_path}preds.pkl'), 'wb') as f:
             pickle.dump(preds, f)
-    # Load again
-    # with open(f'{temp_path}preds.pkl', 'rb') as f:
-    #     preds = pickle.load(f)
 
     return preds
 
 
-def subset_mask_to_prediction_extent(path_reference_mask, path_to_prediction_vrt):
+def subset_mask_to_prediction_extent(path_reference_mask, path_to_prediction_vrt, area):
     '''
     path_reference_mask: path to the reference mask
     path_to_prediction_vrt: path to a vrt of the predicted image chips
@@ -450,7 +459,7 @@ def subset_mask_to_prediction_extent(path_reference_mask, path_to_prediction_vrt
             data = band.ReadAsArray(off_ULx, off_ULy, off_LRx - off_ULx, off_LRy - off_ULy)
 
 
-            out_ds = gdal.GetDriverByName('GTiff').Create(path_reference_mask.split('.')[0] + '_prediction_extent.tif', 
+            out_ds = gdal.GetDriverByName('GTiff').Create(f"{path_reference_mask.split('.')[0]}_prediction_extent_{area}.tif", 
                                                         off_LRx - off_ULx, 
                                                         off_LRy - off_ULy, 1, ds.GetRasterBand(1).DataType)
             out_gt = list(in_gt)
@@ -467,7 +476,8 @@ def subset_mask_to_prediction_extent(path_reference_mask, path_to_prediction_vrt
 def export_GPU_predictions(list_of_predictions, path_to_mask, vrt_path, list_of_row_col_indices, out_path, chipsize, overlap):
     '''
     list_of_predictions: a list of predicted chips at same dimensions (output from predict_on_GPU
-    path_to_mask: a path to mask that has the same dimensions as the vrt on which predictions have been undertaken; can be also a list of masks
+    path_to_mask: a path to mask that has the same dimensions as the vrt on which predictions have been
+                undertaken; can be also a list of masks; can also be a cached object
     vrt_path: path to a folder that contains the vrt files, the predictions (and mask) is based on. Will be used for GeoTransform and Projection
     list_of_row_col_indices: a list in the order row_start, row_end, col_start, col_end (output of get_row_col_indices). 
                                 Will be used to read in mask chips and manipulate Geotransform
@@ -499,7 +509,7 @@ def export_GPU_predictions(list_of_predictions, path_to_mask, vrt_path, list_of_
         out_ds.SetGeoTransform(tuple(geotf))
         out_ds.SetProjection(vrt_ds.GetProjection())
 
-        arr = list_of_predictions[i][0].transpose(1, 2, 0)
+        arr = list_of_predictions[i].transpose(1, 2, 0) # [i][0]
         for band in range(3):
             out_ds.GetRasterBand(band + 1).WriteArray(arr[int(overlap/2): -int(overlap/2), int(overlap/2): -int(overlap/2), band])
         del out_ds
@@ -508,32 +518,38 @@ def export_GPU_predictions(list_of_predictions, path_to_mask, vrt_path, list_of_
 
     # check if mask is a list or single mask
     if isinstance(path_to_mask, list):
-        print('list of masks provided - start exporting')
-        for maski in path_to_mask:
-            mask_name = maski.split('cropMask_')[-1].split('.')[0]
+        pass
+    else:
+        path_to_mask = [path_to_mask]
 
+    for maski in path_to_mask:
+        if isinstance(maski, np.ndarray):
+            mask_name = 'ThuenenMask'
+            mask = maski
+        else:
+            mask_name = maski.split('cropMask_')[-1].split('.')[0]            
             # load mask
             ds = gdal.Open(maski)
             mask = ds.GetRasterBand(1).ReadAsArray()
 
-            for i, file in enumerate(filenames):
-                out_ds = gtiff_driver.Create(path_safe(f'{out_path}{mask_name}/{mask_name}_{str(chipsize)}_{overlap}_{file}'), int(chipsize - overlap), int(chipsize - overlap), 3, gdal.GDT_Float32)
-                # change the Geotransform for each chip
-                geotf = list(geoTF)
-                # get column and rows from filenames
-                geotf[0] = geotf[0] + geotf[1] * (int(file.split('X_')[-1].split('_')[0]) + overlap/2)
-                geotf[3] = geotf[3] + geotf[5] * (int(file.split('Y_')[-1].split('.')[0]) + overlap/2)
-                #print(f'X:{geoTF[0]}  Y:{geoTF[3]}  AT {file}')
-                out_ds.SetGeoTransform(tuple(geotf))
-                out_ds.SetProjection(vrt_ds.GetProjection())
+        for i, file in enumerate(filenames):
+            out_ds = gtiff_driver.Create(path_safe(f'{out_path}{mask_name}/{mask_name}_{str(chipsize)}_{overlap}_{file}'), int(chipsize - overlap), int(chipsize - overlap), 3, gdal.GDT_Float32)
+            # change the Geotransform for each chip
+            geotf = list(geoTF)
+            # get column and rows from filenames
+            geotf[0] = geotf[0] + geotf[1] * (int(file.split('X_')[-1].split('_')[0]) + overlap/2)
+            geotf[3] = geotf[3] + geotf[5] * (int(file.split('Y_')[-1].split('.')[0]) + overlap/2)
+            #print(f'X:{geoTF[0]}  Y:{geoTF[3]}  AT {file}')
+            out_ds.SetGeoTransform(tuple(geotf))
+            out_ds.SetProjection(vrt_ds.GetProjection())
 
-                arr = list_of_predictions[i][0].transpose(1, 2, 0)
+            arr = list_of_predictions[i].transpose(1, 2, 0) # [i][0]
 
-                maskSub = mask[int(int(file.split('Y_')[-1].split('.')[0]) + overlap/2):chipsize + int(int(file.split('Y_')[-1].split('.')[0]) - overlap/2), 
-                            int(int(file.split('X_')[-1].split('_')[0]) + overlap/2):chipsize + int(int(file.split('X_')[-1].split('_')[0]) - overlap/2)]
-                for band in range(3):                
-                    out_ds.GetRasterBand(band + 1).WriteArray(arr[int(overlap/2): -int(overlap/2), int(overlap/2): -int(overlap/2), band] * maskSub)
-                del out_ds
+            maskSub = mask[int(int(file.split('Y_')[-1].split('.')[0]) + overlap/2):chipsize + int(int(file.split('Y_')[-1].split('.')[0]) - overlap/2), 
+                        int(int(file.split('X_')[-1].split('_')[0]) + overlap/2):chipsize + int(int(file.split('X_')[-1].split('_')[0]) - overlap/2)]
+            for band in range(3):                
+                out_ds.GetRasterBand(band + 1).WriteArray(arr[int(overlap/2): -int(overlap/2), int(overlap/2): -int(overlap/2), band] * maskSub)
+            del out_ds
 
 
 def predicted_chips_to_vrt(path_to_chips, chipname, chipsize, overlap, path_to_folder_out, pyramids=False):
@@ -562,3 +578,216 @@ def predicted_chips_to_vrt(path_to_chips, chipname, chipsize, overlap, path_to_f
 
     if pyramids:
         vrtPyramids(vrt_name)
+
+
+def InstSegm(extent, boundary, t_ext=0.4, t_bound=0.2):
+    """
+    INPUTS:
+    extent : extent prediction
+    boundary : boundary prediction
+    t_ext : threshold for extent
+    t_bound : threshold for boundary
+    OUTPUT:
+    instances
+    """
+
+    # Threshold extent mask
+    ext_binary = np.uint8(extent >= t_ext)
+
+    # Artificially create strong boundaries for
+    # pixels with non-field labels
+    input_hws = np.copy(boundary)
+    input_hws[ext_binary == 0] = 1
+
+    # Create the directed graph
+    size = input_hws.shape[:2]
+    graph = hg.get_8_adjacency_graph(size)
+    edge_weights = hg.weight_graph(
+        graph,
+        input_hws,
+        hg.WeightFunction.mean
+    )
+
+    tree, altitudes = hg.watershed_hierarchy_by_dynamics(
+        graph,
+        edge_weights
+    )
+    
+    # Get individual fields
+    # by cutting the graph using altitude
+    instances = hg.labelisation_horizontal_cut_from_threshold(
+        tree,
+        altitudes,
+        threshold=t_bound)
+    
+    instances[ext_binary == 0] = -1
+
+    return instances
+
+
+def get_IoUs(row_col_start, extent_true, extent_pred, boundary_pred, t_ext, 
+             t_bound, dummy_gt, dummy_proj, intermediate_path, intermediate=True):
+    
+    # get predicted instance segmentation
+    instances_pred = InstSegm(extent_pred, boundary_pred, t_ext=t_ext, t_bound=t_bound)
+    instances_pred = measure.label(instances_pred, background=-1) 
+    if intermediate:# and row_col_start == '10760_17982':
+            export_intermediate_products(row_col_start, instances_pred, dummy_gt, dummy_proj,\
+                                        intermediate_path, filename=f'{t_ext}_{t_bound}_instance_pred_{row_col_start}.tif', noData=0)
+
+    # get instances from ground truth label; already done globally during joblist creation
+    # binary_true = extent_true > 0
+    # instances_true = measure.label(binary_true, background=0, connectivity=1)
+    instances_true = extent_true
+    if intermediate:# and row_col_start == '10760_17982':
+            export_intermediate_products(row_col_start, instances_true, dummy_gt, dummy_proj,\
+                                        intermediate_path, filename=f'{t_ext}_{t_bound}_instance_true_{row_col_start}.tif', noData=0)
+
+    # loop through true fields
+    field_values = np.unique(instances_true)
+    
+    best_IoUs = []
+    field_IDs = []
+    field_sizes = []
+    ratio_field_overlap_pred = []
+    ratio_field_overlap_true = []
+    centroid_rows = []
+    centroid_cols = []
+    centroid_IoUS = []
+    centroid_IDs = []
+    intersect_IDs  = []
+
+    for field_value in field_values: # loops over the sampled IACS poylgons
+        if field_value == 0:
+            continue # move on to next value
+
+        this_field = instances_true == field_value # makes a binary raster for the respective sampled IACS poylgon
+        this_field_centroid = np.mean(np.column_stack(np.where(this_field)),axis=0).astype(int) # calculates the centroid of that polygon
+        
+        # fill lists with info
+        centroid_rows.append(this_field_centroid[0])
+        centroid_cols.append(this_field_centroid[1])
+        field_IDs.append(field_value)
+        field_sizes.append(np.sum(this_field))
+        
+        # find predicted fields that intersect with true field
+        intersecting_fields = this_field * instances_pred # multiplies binary raster of sampled IACS poylgon with prediction --> only overlapping predicted fields in raster
+        intersect_values = np.unique(intersecting_fields) # get the labeled IDS from intersecting predicted fields
+  
+        # compute IoU for each intersecting field
+        field_IoUs = []
+        intersect_area_pred = []
+        intersect_area_true = []
+        centroid_IoU = 0
+        centroid_ID = 0
+
+        for intersect_value in intersect_values:
+            if intersect_value == 0:
+                field_IoUs.append(0)
+                intersect_area_pred.append(0)
+                intersect_area_true.append(0)
+                continue # move on to next value
+            
+            pred_field = instances_pred == intersect_value # makes a binary raster of of intersecting predicted field
+            pred_field_area = np.sum(pred_field) # calculates the area of that polygon
+
+            # calculate IoU
+            union = this_field + pred_field > 0
+            intersection = (this_field * pred_field) > 0
+            IoU = np.sum(intersection) / np.sum(union)
+            field_IoUs.append(IoU)
+            intersect_area_pred.append(np.sum(intersection) / pred_field_area)
+            intersect_area_true.append(np.sum(intersection) / np.sum(this_field))
+
+            # check for centroid condition
+            if instances_pred[this_field_centroid[0], this_field_centroid[1]] == intersect_value:
+                centroid_IoU = IoU
+                centroid_ID = intersect_value
+    
+        # take maximum IoU - this is the IoU for this true field
+        if len(field_IoUs) > 1 or field_IoUs[0] != 0:
+            best_IoUs.append(np.max(field_IoUs))
+            ratio_field_overlap_pred.append(intersect_area_pred[np.argmax(field_IoUs)])
+            ratio_field_overlap_true.append(intersect_area_true[np.argmax(field_IoUs)])
+            intersect_IDs.append(intersect_values[np.argmax(field_IoUs)])
+        else:
+            best_IoUs.append(0)
+            ratio_field_overlap_pred.append(0)
+            ratio_field_overlap_true.append(0)
+            intersect_IDs.append(0)
+        
+        # fill centroid list
+        centroid_IoUS.append(centroid_IoU)
+        centroid_IDs.append(centroid_ID)
+    
+
+    # export centroids and intersecting fields with best IoUs
+    if intermediate:# and row_col_start == '10760_17982':
+
+            # Create mask of intersecting fields with best IoUs
+            intersect_mask = np.isin(instances_pred, centroid_IDs)# intersectL)
+            filtered_instances_pred = instances_pred * intersect_mask
+            
+            # centroids
+            for r,c, cid in zip(centroid_rows, centroid_cols, centroid_IDs):
+                filtered_instances_pred[r, c] = cid
+
+                export_intermediate_products(row_col_start, filtered_instances_pred, dummy_gt, dummy_proj, \
+                                            intermediate_path, filename=f'{t_ext}_{t_bound}_intersected_at_max_and_centroids_{row_col_start}.tif', noData=0)
+
+    return best_IoUs, centroid_IoUS, centroid_rows, centroid_cols, centroid_IDs, field_IDs, field_sizes, intersect_IDs, ratio_field_overlap_pred, ratio_field_overlap_true
+
+
+
+def get_IoUs_per_Tile(row_col_start, extent_true, extent_pred, boundary_pred, result_dir, \
+                      dummy_gt, dummy_proj, intermediate_path, intermediate=False, t_ext=False, t_bound=False):
+    
+    print(f'Starting on tile {row_col_start} for {result_dir}')
+    # make a dictionary for export
+    k = ['row_col_start','t_ext','t_bound', 'max_IoU', 'centroid_IoU', 'centroid_row', 'centroid_col', 'centroid_IDs',\
+         'reference_field_IDs', 'reference_field_sizes', 'intersect_IDs', 'ratio_intersect_area_pred', 'ratio_intersect_area_true'] #'medianIoU', 'meanIoU', 'IoU_50', 'IoU_80']
+    v = [list() for i in range(len(k))]
+    res = dict(zip(k, v))
+
+    # set the parameter combinations and test combinations
+    if not t_ext:
+        t_exts = [i/100 for i in range(10,95,5)] 
+        t_bounds = [i/100 for i in range(10,95,5)]
+    else:
+        if isinstance(t_ext, list):
+            t_exts = t_ext
+            t_bounds = t_bound
+        else:
+            t_exts = [t_ext]
+            t_bounds = [t_bound]
+    # loop over parameter combinations
+    for t_ext in t_exts:
+        for t_bound in t_bounds:
+            #print('thresholds: ' + str(t_ext) + ', ' +str(t_bound))
+
+            img_IoUs, centroid_IoUS, centroid_rows, centroid_cols, centroid_IDs, field_IDs, field_sizes , intersect_IDS,\
+                ratio_intersect_area_pred, ratio_intersect_area_true = \
+                get_IoUs(row_col_start, extent_true, extent_pred, boundary_pred, t_ext, t_bound, dummy_gt, \
+                         dummy_proj, intermediate_path, intermediate=intermediate)
+            
+            for e, IoUs in enumerate(img_IoUs):
+    
+                res['row_col_start'].append(row_col_start)
+                res['t_ext'].append(t_ext)
+                res['t_bound'].append(t_bound)
+                res['max_IoU'].append(IoUs)
+                res['centroid_IoU'].append(centroid_IoUS[e])
+                res['centroid_row'].append(centroid_rows[e])
+                res['centroid_col'].append(centroid_cols[e])
+                res['centroid_IDs'].append(centroid_IDs[e])
+                res['reference_field_IDs'].append(field_IDs[e])
+                res['reference_field_sizes'].append(field_sizes[e])
+                res['intersect_IDs'].append(intersect_IDS[e])
+                res['ratio_intersect_area_pred'].append(ratio_intersect_area_pred[e])
+                res['ratio_intersect_area_true'].append(ratio_intersect_area_true[e])
+    
+    # export results
+    df  = pd.DataFrame(data = res)
+    df.to_csv(f'{result_dir}/{row_col_start}_IoU_hyperparameter_tuning.csv', index=False)
+
+    print(f'Finished tile {row_col_start}')

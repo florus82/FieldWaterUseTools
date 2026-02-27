@@ -9,7 +9,7 @@ import pandas as pd
 from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
-import FieldWaterUseTools.FuncBox.tfcl.models.ptavit3d.ptavit3d_dn     
+import FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d.ptavit3d_dn     
 from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.loss.ftnmt_loss import ftnmt_loss               
 from FieldWaterUseTools.FuncBox.other_repos.tfcl.utils.classification_metric import Classification  
 from FieldWaterUseTools.FuncBox.FieldFuncis import *

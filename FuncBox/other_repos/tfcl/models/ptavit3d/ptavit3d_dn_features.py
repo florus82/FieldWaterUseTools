@@ -1,13 +1,11 @@
 import torch
 import numpy as np
 
-from tfcl.nn.layers.conv3Dnormed import *
-
-
-from tfcl.nn.layers.patchattention_thw import  *  
-from tfcl.nn.layers.scale import *
-from tfcl.nn.layers.combine import *
-from tfcl.nn.units.ptavit3d import *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.layers.conv3Dnormed import *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.layers.patchattention_thw import  *  
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.layers.scale import *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.layers.combine import *
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.units.ptavit3d import *
 
 
 import copy
