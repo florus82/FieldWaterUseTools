@@ -12,52 +12,6 @@ import rasterio
 from scipy import ndimage
 
 
-EXCLUDE_LIST = ['',
- '(Beta-)Rübensamenvermehrung',
- 'Alle anderen Flächen (keine LF)',
- 'Baumschulen, nicht für Beerenobst',
- 'Bestockte Rebfläche',
- 'Erosionsschutzstreifen',
- 'Forstflächen (Waldbodenflächen)',
- 'Gewässerschutzstreifen',
- 'Grassamenvermehrung',
- 'Haus- und Nutzgärten',
- 'KUP lt. Direktzahlungendurchführungsverordnung',
- 'KUP lt. Direktzahlungendurchführungsverordnung (keine ÖVF)',
- 'KUP lt. GAPDZV',
- 'N. LNF, n. Art. 32(2b(i)) der VO(EG) Nr.1307/2013 beihilfef. Fl.',
- 'Nicht landwirt. Fl. In der Verfügungsgewalt des Antragstellers, die gem. § 15 (1) DirektZahlDurchfG als umweltsensibles Dauergrünland bestimmt worden sind',
- 'Nicht landwirt. Fl. infolge Genehmigung DGL Umwandlung',
- 'Nicht landwirtschaftliche, aber nach Art. 32(2b (i)) der VO (EG) Nr. 1307/2013 beihilfefähige Fläche',
- 'Nicht landwirtschaftliche, aber nach Art. 32(2b (i)) der VO (EG) Nr. 1307/2013 beihilfefähige Fläche (Naturschutzflächen, die 2008 noch beihilfefähig waren)',
- 'Nicht landwirtschaftliche, aber nach §11 (1) Nr.3 Bst. a) bb) der GAPDZV förderfähige Fläche (Infolge Anwendung der Wasserrahmenrichtlinie)',
- 'Nicht landwirtschaftliche, aber §11 (1) Nr.3 Bst. c) der GAPDZV förderfähige Fläche (Aufforstungsverpflichtung nach VO 1257/1999 oder VO (EG) Nr. 1698/2005 oder VO 1305/2013 oder VO 2021/2115 oder bei Eingehung damit in Einklang stehender öffentlich',
- 'None',
- 'Pufferstreifen ÖVF DGL',
- 'Schonstreifen',
- 'Streifen am Waldrand (ohne Produktion) ÖVF',
- 'Ufervegetation ÖVF',
- 'Unbefestigte Mieten-, Stroh-, Futter und Dunglagerplätze auf AL',
- 'Unbefestigte Mieten-, Stroh-, Futter und Dunglagerplätze auf DGL',
- 'Unbestockte Rebfläche',
- 'Vorübergehende, unbefestigte Mieten-, Stroh-, Futter und Dunglagerplätze auf AL',
- 'Vorübergehende, unbefestigte Mieten-, Stroh-, Futter und Dunglagerplätze auf DGL',
- 'Weihnachtsbäume',
- 'Wildäsungsfläche',
- 'afforestation_reforestation',
- 'alle anderen Flächen (keine LF)',
- 'aufgeforstete Dauergrünlandflächen, weder nach 1257/99 oder VO (EG) Nr. 1698/2005  1305/2013oder VO (EU) Nr.1305/2013',
- 'aufgeforstete Flächen (VO1257/1999, 1698/2005, 1305/2013)',
- 'greenhouse_foil_film',
- 'nach VO 1257/1999 oder VO (EG) Nr. 1698/2005 oder VO 1305/2013 aufgeforstete Flächen',
- 'not_known_and_other',
- 'nurseries_nursery',
- 'tree_wood_forest',
- 'unmaintained',
- 'vorübergehend unbefestigte Mieten-, Stroh-, Futter oder Dunglagerplätze auf DGL',
- 'vorübergehende, unbefestigte Mieten-, Stroh-, Futter oder Dunglagerplätze auf AL']
-
-
 # 00_polygons_to_lines.py
 def polygons_to_lines(path_to_polygon, path_to_lines_out, categories=None, category_col=None):
     
@@ -291,6 +245,7 @@ def make_crop_mask(path_to_polygon, path_to_extent_raster, path_to_mask_out, pat
             print(f'Mask for {path_to_polygon} in combination with {path_to_rasterized_lines} already exists!!!')
     else:
         pass
+
 
 def polygon_distance_normalized(path_to_uniqueIDfields, outPath=False, background_val=False):
     """

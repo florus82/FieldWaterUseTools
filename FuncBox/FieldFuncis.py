@@ -7,6 +7,8 @@ import torch
 import pickle
 import time
 from tqdm import tqdm
+import os
+os.environ["NO_ALBUMENTATIONS_UPDATE"] = "1"
 import albumentations as A
 from albumentations.core.transforms_interface import  ImageOnlyTransform
 from torch.amp import autocast
@@ -18,7 +20,6 @@ import rasterio
 import xarray as xr
 from osgeo import gdal
 gdal.DontUseExceptions()
-import os
 import random
 from FieldWaterUseTools.FuncBox.other_repos.tfcl.utils.classification_metric import Classification
 from FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d.ptavit3d_dn import ptavit3d_dn
@@ -427,7 +428,7 @@ def predict_on_GPU(path_to_model, list_of_row_col_indices, npdstack, batch_size=
     return preds
 
 
-def subset_mask_to_prediction_extent(path_reference_mask, path_to_prediction_vrt, area):
+def subset_mask_to_prediction_extent(path_reference_mask, path_to_prediction_vrt, area='no_area_specified', returnToMemory=False):
     '''
     path_reference_mask: path to the reference mask
     path_to_prediction_vrt: path to a vrt of the predicted image chips
@@ -458,19 +459,21 @@ def subset_mask_to_prediction_extent(path_reference_mask, path_to_prediction_vrt
             band = ds.GetRasterBand(1)
             data = band.ReadAsArray(off_ULx, off_ULy, off_LRx - off_ULx, off_LRy - off_ULy)
 
+            if not returnToMemory:
+                out_ds = gdal.GetDriverByName('GTiff').Create(f"{path_reference_mask.split('.')[0]}_prediction_extent_{area}.tif", 
+                                                            off_LRx - off_ULx, 
+                                                            off_LRy - off_ULy, 1, ds.GetRasterBand(1).DataType)
+                out_gt = list(in_gt)
+                out_gt[0], out_gt[3] = gdal.ApplyGeoTransform(in_gt, off_ULx, off_ULy)
+                out_ds.SetGeoTransform(out_gt)
+                out_ds.SetProjection(ds.GetProjection())
 
-            out_ds = gdal.GetDriverByName('GTiff').Create(f"{path_reference_mask.split('.')[0]}_prediction_extent_{area}.tif", 
-                                                        off_LRx - off_ULx, 
-                                                        off_LRy - off_ULy, 1, ds.GetRasterBand(1).DataType)
-            out_gt = list(in_gt)
-            out_gt[0], out_gt[3] = gdal.ApplyGeoTransform(in_gt, off_ULx, off_ULy)
-            out_ds.SetGeoTransform(out_gt)
-            out_ds.SetProjection(ds.GetProjection())
-
-            out_ds.GetRasterBand(1).WriteArray(data)
-            if band.GetNoDataValue():
-                out_ds.GetRasterBand(1).SetNoDataValue(band.GetNoDataValue())
-            del out_ds
+                out_ds.GetRasterBand(1).WriteArray(data)
+                if band.GetNoDataValue():
+                    out_ds.GetRasterBand(1).SetNoDataValue(band.GetNoDataValue())
+                del out_ds
+            else:
+                return data
 
 
 def export_GPU_predictions(list_of_predictions, path_to_mask, vrt_path, list_of_row_col_indices, out_path, chipsize, overlap):
@@ -636,105 +639,100 @@ def get_IoUs(row_col_start, extent_true, extent_pred, boundary_pred, t_ext,
                                         intermediate_path, filename=f'{t_ext}_{t_bound}_instance_pred_{row_col_start}.tif', noData=0)
 
     # get instances from ground truth label; already done globally during joblist creation
-    # binary_true = extent_true > 0
-    # instances_true = measure.label(binary_true, background=0, connectivity=1)
     instances_true = extent_true
     if intermediate:# and row_col_start == '10760_17982':
             export_intermediate_products(row_col_start, instances_true, dummy_gt, dummy_proj,\
                                         intermediate_path, filename=f'{t_ext}_{t_bound}_instance_true_{row_col_start}.tif', noData=0)
 
-    # loop through true fields
-    field_values = np.unique(instances_true)
-    
+    # create all lists to collect values
     best_IoUs = []
-    field_IDs = []
-    field_sizes = []
-    ratio_field_overlap_pred = []
-    ratio_field_overlap_true = []
-    centroid_rows = []
-    centroid_cols = []
-    centroid_IoUS = []
-    centroid_IDs = []
-    intersect_IDs  = []
+    field_IDs = [] # the ID given from global labelling to sampled reference IACS polyon
+    field_sizes = [] # the number of pixel of the reference IACS field (field_IDs)
+    ratio_field_overlap_pred = [] # this is the ratio of the intersection between reference and prediction polygon and the entire predicted polygon with the best IoU score for the respective reference polygon (field_IDs)
+    ratio_field_overlap_true = [] # this is the ratio of the intersection between reference and prediction polygon and the entire reference polygon with the best IoU score for the respective reference polygon (field_IDs)
+    centroid_rows = [] # the row an IACS reference polygon at the same index as at field_IDs
+    centroid_cols = [] # the col an IACS reference polygon at the same index as at field_IDs
+    centroid_IoUS = [] # the IoU of the predicted polygon that covers the centroid of respective reference polygon (field_ID)
+    centroid_IDs = [] # gives the ID from labelling at instances_pred from the predicted polygon that covers the centroid of respective reference polygon (field_ID)
+    intersect_IDs  = [] # gives the ID from labelling at instances_pred from the predicted polygon with the best IoU for the field_ID at the respective index
 
-    for field_value in field_values: # loops over the sampled IACS poylgons
-        if field_value == 0:
-            continue # move on to next value
+    # loop over sampled true (reference) fields
+    field_values = np.unique(instances_true)
+
+    for field_value in field_values:
 
         this_field = instances_true == field_value # makes a binary raster for the respective sampled IACS poylgon
         this_field_centroid = np.mean(np.column_stack(np.where(this_field)),axis=0).astype(int) # calculates the centroid of that polygon
-        
-        # fill lists with info
+
         centroid_rows.append(this_field_centroid[0])
         centroid_cols.append(this_field_centroid[1])
         field_IDs.append(field_value)
         field_sizes.append(np.sum(this_field))
-        
+
         # find predicted fields that intersect with true field
         intersecting_fields = this_field * instances_pred # multiplies binary raster of sampled IACS poylgon with prediction --> only overlapping predicted fields in raster
         intersect_values = np.unique(intersecting_fields) # get the labeled IDS from intersecting predicted fields
-  
-        # compute IoU for each intersecting field
-        field_IoUs = []
-        intersect_area_pred = []
-        intersect_area_true = []
+
+        # compute IoU for each intersecting field and then store the best one in list outside of this loop
+        field_IoUs = [] # stores the IoUs off all intersecting polygons
+        intersect_area_pred_ratio = [] # this is the ratio of the intersection between reference and prediction polygon and the entire predicted polygon
+        intersect_area_true_ratio = []# this is the ratio of the intersection between reference and prediction polygon and the entire reference polygon
         centroid_IoU = 0
         centroid_ID = 0
 
-        for intersect_value in intersect_values:
-            if intersect_value == 0:
+        for intersect_value in intersect_values: # loop over all predicted polygons that intersect with the referene IACS polygon
+            if intersect_value == 0: # this is just the masked background, not an actual polygon
                 field_IoUs.append(0)
-                intersect_area_pred.append(0)
-                intersect_area_true.append(0)
+                intersect_area_pred_ratio.append(0)
+                intersect_area_true_ratio.append(0)
                 continue # move on to next value
             
             pred_field = instances_pred == intersect_value # makes a binary raster of of intersecting predicted field
             pred_field_area = np.sum(pred_field) # calculates the area of that polygon
 
             # calculate IoU
-            union = this_field + pred_field > 0
-            intersection = (this_field * pred_field) > 0
-            IoU = np.sum(intersection) / np.sum(union)
+            union = this_field + pred_field > 0 # this is the union area of the reference and predicted polygon (--> the U in IoU)
+            intersection = (this_field * pred_field) > 0 # this the intersect area of the reference and predicted polygon (--> the I in IoU)
+            IoU = np.sum(intersection) / np.sum(union) # (--> the o in IoU)
             field_IoUs.append(IoU)
-            intersect_area_pred.append(np.sum(intersection) / pred_field_area)
-            intersect_area_true.append(np.sum(intersection) / np.sum(this_field))
+            intersect_area_pred_ratio.append(np.sum(intersection) / pred_field_area)
+            intersect_area_true_ratio.append(np.sum(intersection) / np.sum(this_field))
 
             # check for centroid condition
             if instances_pred[this_field_centroid[0], this_field_centroid[1]] == intersect_value:
                 centroid_IoU = IoU
                 centroid_ID = intersect_value
-    
+
         # take maximum IoU - this is the IoU for this true field
-        if len(field_IoUs) > 1 or field_IoUs[0] != 0:
+        if len(field_IoUs) > 1 or field_IoUs[0] != 0: # if there is only one value that is not 0, the condition is True
             best_IoUs.append(np.max(field_IoUs))
-            ratio_field_overlap_pred.append(intersect_area_pred[np.argmax(field_IoUs)])
-            ratio_field_overlap_true.append(intersect_area_true[np.argmax(field_IoUs)])
-            intersect_IDs.append(intersect_values[np.argmax(field_IoUs)])
+            ratio_field_overlap_pred.append(intersect_area_pred_ratio[np.argmax(field_IoUs)])
+            ratio_field_overlap_true.append(intersect_area_true_ratio[np.argmax(field_IoUs)])
+            intersect_IDs.append(intersect_values[np.argmax(field_IoUs)]) # works because the is a value in field_IoUs for every intersect_value
         else:
             best_IoUs.append(0)
             ratio_field_overlap_pred.append(0)
             ratio_field_overlap_true.append(0)
             intersect_IDs.append(0)
-        
+
         # fill centroid list
         centroid_IoUS.append(centroid_IoU)
         centroid_IDs.append(centroid_ID)
-    
 
     # export centroids and intersecting fields with best IoUs
     if intermediate:# and row_col_start == '10760_17982':
 
-            # Create mask of intersecting fields with best IoUs
-            intersect_mask = np.isin(instances_pred, centroid_IDs)# intersectL)
-            filtered_instances_pred = instances_pred * intersect_mask
-            
-            # centroids
-            for r,c, cid in zip(centroid_rows, centroid_cols, centroid_IDs):
-                filtered_instances_pred[r, c] = cid
+        # Create mask of intersecting fields with best IoUs
+        intersect_mask = np.isin(instances_pred, centroid_IDs)# intersectL)
+        filtered_instances_pred = instances_pred * intersect_mask
+        
+        # centroids
+        for r,c, cid in zip(centroid_rows, centroid_cols, centroid_IDs):
+            filtered_instances_pred[r, c] = np.max(centroid_IDs)+100
 
-                export_intermediate_products(row_col_start, filtered_instances_pred, dummy_gt, dummy_proj, \
-                                            intermediate_path, filename=f'{t_ext}_{t_bound}_intersected_at_max_and_centroids_{row_col_start}.tif', noData=0)
-
+        export_intermediate_products(row_col_start, filtered_instances_pred, dummy_gt, dummy_proj, \
+                                    intermediate_path, filename=f'{t_ext}_{t_bound}_intersected_at_max_and_centroids_{row_col_start}.tif', noData=0)
+        
     return best_IoUs, centroid_IoUS, centroid_rows, centroid_cols, centroid_IDs, field_IDs, field_sizes, intersect_IDs, ratio_field_overlap_pred, ratio_field_overlap_true
 
 
@@ -751,8 +749,11 @@ def get_IoUs_per_Tile(row_col_start, extent_true, extent_pred, boundary_pred, re
 
     # set the parameter combinations and test combinations
     if not t_ext:
-        t_exts = [i/100 for i in range(10,95,5)] 
-        t_bounds = [i/100 for i in range(10,95,5)]
+        # t_exts = [i/100 for i in range(50,95,5)] 
+        # t_bounds = [i/100 for i in range(10,95,5)]
+        # t_exts = [i/100 for i in range(10, 100, 10)] 
+        # t_bounds = [i/100 for i in range(10, 100, 10)]
+        print('no parameter provided')
     else:
         if isinstance(t_ext, list):
             t_exts = t_ext
@@ -789,5 +790,32 @@ def get_IoUs_per_Tile(row_col_start, extent_true, extent_pred, boundary_pred, re
     # export results
     df  = pd.DataFrame(data = res)
     df.to_csv(f'{result_dir}/{row_col_start}_IoU_hyperparameter_tuning.csv', index=False)
+
+    print(f'Finished tile {row_col_start}')
+
+
+def apply_seg_parameters(row_col_start, extent_pred, boundary_pred, result_dir, result_name, dummy_gt, dummy_proj, t_ext, t_bound):
+    
+    print(f'Starting on tile {row_col_start} for {result_dir}')
+    
+    if isinstance(t_ext, list):
+        t_exts = t_ext
+        t_bounds = t_bound
+    else:
+        t_exts = [t_ext]
+        t_bounds = [t_bound]
+
+    # loop over parameter combinations
+    for t_ext in t_exts:
+        for t_bound in t_bounds:
+            #print('thresholds: ' + str(t_ext) + ', ' +str(t_bound))
+   
+            # get predicted instance segmentation
+            instances_pred = InstSegm(extent_pred, boundary_pred, t_ext=t_ext, t_bound=t_bound)
+            instances_pred = measure.label(instances_pred, background=-1) 
+            export_intermediate_products(row_col_start, instances_pred, dummy_gt, dummy_proj, result_dir,
+                                         filename=f"{result_name}_{row_col_start}.tif", noData=0)
+
+            
 
     print(f'Finished tile {row_col_start}')

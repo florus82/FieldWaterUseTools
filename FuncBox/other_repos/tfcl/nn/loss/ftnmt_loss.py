@@ -1,5 +1,5 @@
 import torch
-from tfcl.nn.layers.ftnmt import * 
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.layers.ftnmt import * 
 
 
 class ftnmt_loss(torch.nn.Module):

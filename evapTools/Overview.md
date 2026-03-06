@@ -20,11 +20,12 @@
 
 
 ## Preprocessing
-- Sentinel-2, DEM (+derivates), Lat, Long, Thuenen all coregistered (warped), same spatial extent and resolution (20m)
+- create a tiling system as processing across Germany probably too computaionally heavy
+- Sentinel-2 compositing
+- DEM (+derivates), Lat, Long, Thuenen all coregistered (warped) to Sentinel-2, same spatial extent and resolution (20m) (create only once?)
 - Sentinel-3 compositing (0° threshold, VZA, acquisition time, 2m ERA-5 air temperature)
 - Sentinel-3 sharpening (maybe including daily incidence calculation)
 - maybe add biophysical parameter derivation
-
 - Sentinel-3 will match other rasters after sharpening
 
 ## Apply model
@@ -32,9 +33,13 @@
 - starting from the data of the composite, all Sentinel-3 LST images that fall within 9day threshold (+/- 4 days of composite date) will be sharpened
 - 
 
-## Issues with transfer
+## Questions transfer
 - so far, we use the FORCE algorithm (https://force-eo.readthedocs.io/en/latest/) on our in-house Sentinel-2 datacube and our whole pipelin is based on its tiling scheme
 - collecting files based on filenames (search scheme based on .split might be arbitrary/messy)
+- how much data could be stored, e.g. files that don't change per iteration, e.g. DEM, SLope,
+
+
+
 
 ## Package list
 numpy, osgeo, datetime, re, time, pandas, pvlib, scipy, collections, math, multiprocessing, sklearn, sys, numba, pyproj, pypro4sail, skyimage, rasterio

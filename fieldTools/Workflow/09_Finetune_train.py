@@ -10,7 +10,7 @@ import pandas as pd
 from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
-import FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d.ptavit3d_dn
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d import ptavit3d_dn
 from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.loss.ftnmt_loss import ftnmt_loss               
 from FieldWaterUseTools.FuncBox.FieldFuncis import *
 from FieldWaterUseTools.FuncBox.Misc import shuffle2Lists
@@ -110,7 +110,7 @@ def train(args):
                     'verbose': verbose,
                     'segm_act': 'sigmoid'}
 
-    model = ptavit3d_dn.ptavit3d_dn(**model_config).to(local_rank)
+    model = ptavit3d_dn(**model_config).to(local_rank)
 
     # set checkpoint
     checkpoint = torch.load(f'{origin}fields/output/models/model_state_{model_check}.pth',

@@ -9,14 +9,14 @@ import pandas as pd
 from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
-import FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d.ptavit3d_dn     
+from FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d import ptavit3d_dn
 from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.loss.ftnmt_loss import ftnmt_loss               
 from FieldWaterUseTools.FuncBox.other_repos.tfcl.utils.classification_metric import Classification  
 from FieldWaterUseTools.FuncBox.FieldFuncis import *
 from FieldWaterUseTools.FuncBox.Misc import shuffle2Lists
 
 
-dilate = 'False'
+dilate = 'True'
 overlap = 'with'
 # set the rocksdb on which training will be performed
 db_name = f"FromScratch_IACS_dilate_{dilate}_BorderEdgeCutted_RGB_NDVI_exclude_True_{overlap}_overlap"
@@ -55,7 +55,7 @@ def train(args):
                     'verbose': verbose,
                     'segm_act': 'sigmoid'}
 
-    model = ptavit3d_dn.ptavit3d_dn(**model_config).to(local_rank)
+    model = ptavit3d_dn(**model_config).to(local_rank)
     criterion = ftnmt_loss()
     criterionV = ftnmt_loss()
     criterion_features = ftnmt_loss(axis=[-3, -2, -1])
@@ -63,7 +63,7 @@ def train(args):
     scaler = GradScaler()
 
     train_valid_split = 0.75
-    train_ds_path = f"{origin}fields/Fine_dilate_{dilate}/"
+    train_ds_path = f"{origin}fields/02_Chips_generated_from_IACS/Fine_dilate_{dilate}/"
     imgs_list = getFilelist(train_ds_path, '.nc', deep=True)
     masks_list = getFilelist(train_ds_path, '.tif', deep=True)
 
@@ -139,13 +139,13 @@ def train(args):
         print("Training completed in: " + str(datetime.now() - start))
 
     
-    torch.save(conti[0], f'{origin}fields/output/models/model_state_{db_name}_{conti[1]}_CONTROL.pth') # 
+    torch.save(conti[0], f'{origin}fields/03_Output/models/model_state_{db_name}_{conti[1]}_CONTROL.pth') # 
 
     df  = pd.DataFrame(data = res_loss)
-    df.to_csv(f'{origin}fields/output/loss/loss_{db_name}_{conti[1]}.csv', sep=',',index=False)
+    df.to_csv(f'{origin}fields/03_Output/loss/loss_{db_name}_{conti[1]}.csv', sep=',',index=False)
 
     df  = pd.DataFrame(data = res_mcc)
-    df.to_csv(f'{origin}fields/output/loss/MCC_{db_name}_{conti[1]}.csv', sep=',',index=False)
+    df.to_csv(f'{origin}fields/03_Output/loss/MCC_{db_name}_{conti[1]}.csv', sep=',',index=False)
 
 
 def main():
