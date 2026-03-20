@@ -16,7 +16,7 @@ model is based on 4 10m Sentinel-2 Bands
 ## Results so far
 
 <p align="center">
-  <img src="model_results_comparison.png" width="800">
+  <img src="model_results_comparison.png" width="1200">
 </p>
 
 
@@ -39,6 +39,12 @@ A mask is applied optionally. We used so far the IACS masks which we cannot do f
 - we test different parameter combinations (thresholds for probability maps for fields and boundaries) in a watershed segmentation algorithm
   --> thoughts on that: if parameter for probability for field is not chosen very high (>.8), there are hardly any boundaries. Furhermore, simply thresholding the extent probability map appears to deliver the same output as InstSegm
 - in the tests, we compare against an IACS mask that is adapted with respective thuenen mask (where thuenen mask == 0 -> IACS = 0)
+
+
+<p align="center">
+  <img src="grid_search_AI4_RGB_exclude_True_38.png" width="800">
+</p>
+
 
 ## Validation procedure II (after segmenting probability maps into final field map)
 

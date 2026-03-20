@@ -16,15 +16,19 @@ from FieldWaterUseTools.FuncBox.FieldFuncis import *
 from FieldWaterUseTools.FuncBox.Misc import shuffle2Lists
 
 
-dilate = 'False'
+dilate = 'True'
 overlap = 'with'
 # setfine-tune dataset
 db_name = f"IACS_dilate_{dilate}_BorderEdgeCutted_RGB_NDVI_exclude_True_{overlap}_overlap"
 # borderedgecutted -_> false 0 chips at edge are gone
 
 # set model that is fine-tuned
-model_check = 'AI4_RGB_exclude_True_38'
+model_check = 'FromScratch_IACS_dilate_True_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_47'
 random.seed(42)
+
+outputPath = f"{origin}fields/03_Output/"
+path_to_model = f"{outputPath}models/model_state_{model_check}.pth"
+train_ds_path = f"{origin}fields/02_Chips_generated_from_IACS/Fine_dilate_{dilate}/"
 
 # freezing strategies
 
@@ -113,7 +117,7 @@ def train(args):
     model = ptavit3d_dn(**model_config).to(local_rank)
 
     # set checkpoint
-    checkpoint = torch.load(f'{origin}fields/output/models/model_state_{model_check}.pth',
+    checkpoint = torch.load(path_to_model,
                         map_location='cuda')
     model.load_state_dict(checkpoint, strict=True)
     print("Loaded pretrained weights.")
@@ -156,7 +160,7 @@ def train(args):
     scaler = GradScaler()
     train_valid_split = 0.75
 
-    train_ds_path = f"{origin}fields/Fine_dilate_{dilate}/"
+    
     imgs_list = getFilelist(train_ds_path, '.nc', deep=True)
     masks_list = getFilelist(train_ds_path, '.tif', deep=True)
 
@@ -231,13 +235,13 @@ def train(args):
         print("Training completed in: " + str(datetime.now() - start))
 
     
-    torch.save(conti[0], f'{origin}fields/output/models/model_state_{db_name}_{conti[1]}_on_{model_check}_{name_extra}.pth') # 
+    torch.save(conti[0], f'{outputPath}models/model_state_{db_name}_{conti[1]}_on_{model_check}_{name_extra}.pth') # 
 
     df  = pd.DataFrame(data = res_loss)
-    df.to_csv(f'{origin}fields/output/loss/loss_{db_name}_on_{model_check}_{name_extra}.csv', sep=',',index=False)
+    df.to_csv(f'{outputPath}loss/loss_{db_name}_on_{model_check}_{name_extra}.csv', sep=',',index=False)
 
     df  = pd.DataFrame(data = res_mcc)
-    df.to_csv(f'{origin}fields/output/loss/MCC_{db_name}_on_{model_check}_{name_extra}.csv', sep=',',index=False)
+    df.to_csv(f'{outputPath}loss/MCC_{db_name}_on_{model_check}_{name_extra}.csv', sep=',',index=False)
 
 
 def main():

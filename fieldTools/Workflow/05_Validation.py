@@ -21,7 +21,7 @@ state_folders = ['BRB', 'LSA', 'MV', 'NRW', 'SL']
 
 # set variables
 year = 2023
-model_name = 'AI4_RGB_exclude_True_38' #'FromScratch_IACS_dilate_False_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_22' 
+model_name = 'IACS_dilate_True_overlap_40_on_FromScratch_IACS_dilate_True_with_overlap_47_FREEZER_2'#IACS_dilate_False_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_40_on_AI4_RGB_exclude_True_38_FREEZER_2' 
 state = 'Brandenburg'
 state_code = state_folders[states.index(state)]
 ncores = 100
@@ -29,11 +29,11 @@ np.random.seed(42)
 slicer = 10 # determines the number of tiles whole prediction will be be sliced into
 border_limit = 5 # dont sample fields too close to tile borders
 sample_size  = 20000
-make_tifs_from_intermediate_step = False # for debugging and checks
+make_tifs_from_intermediate_step = True # for debugging and checks
 
 # parameter list to check combinations for
-t_exts = [i/100 for i in range(10, 100, 10)] 
-t_bounds = [i/100 for i in range(10, 100, 10)]
+t_exts = [i/100 for i in range(10, 30, 10)] 
+t_bounds = [i/100 for i in range(10, 20, 10)]
 
 
 # paths
@@ -53,7 +53,7 @@ path_to_IACS = f"{origin}fields/01_IACS/4_Crop_mask/{state_code}/{year}/IACS_{st
 # - cropMask_lines_touch_true_crop_touch_true_linecrop --> contains artefacts: fields where there are none
 # - cropMask_cropMask_lines_touch_true_crop_touch_false_linecrop --> similar to cropMask_cropMask_lines_touch_false_crop_touch_false_linecrop, but less overlap
 
-chip_overlap_mask_combos = ['ThuenenMask_768_20', 'unmasked_chips_768_20', 'ThuenenMask_256_20', 'unmasked_chips_256_20', 'ThuenenMask_512_20', 'unmasked_chips_512_20']
+chip_overlap_mask_combos = ['ThuenenMask_256_20', 'unmasked_chips_256_20']#'ThuenenMask_768_20', 'unmasked_chips_768_20', 'ThuenenMask_512_20', 'unmasked_chips_512_20' 
 pred_list = [f"{path_to_predictions}{combi}.vrt" for combi in chip_overlap_mask_combos]
 
 overlords_jobs = []
@@ -62,7 +62,7 @@ ref_dim = 0
 
 for idx, prediction in enumerate(pred_list):
     if idx == 0:
-        intermediate_export = False
+        intermediate_export = True
     else:
         intermediate_export = False
     reference_arr = subset_mask_to_prediction_extent(path_to_IACS, prediction, returnToMemory=True)
@@ -73,8 +73,8 @@ for idx, prediction in enumerate(pred_list):
         reference_arr[th_mask == 0] = 0 # important when we test against the thuenen masked prediction
     outFolder = path_safe(f"{origin}fields/05_GridSearch/{state}/{model_name}/{year}/{chip_overlap_mask_combos[idx]}/")
 
-    inter_path = path_safe(f'{outFolder}intermediates2/')
-    result_path = path_safe(f'{outFolder}results2/')
+    inter_path = path_safe(f'{outFolder}intermediates3/')
+    result_path = path_safe(f'{outFolder}results3/')
 
     ######### prepare job-list
 

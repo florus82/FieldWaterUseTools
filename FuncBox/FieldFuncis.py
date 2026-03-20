@@ -660,7 +660,9 @@ def get_IoUs(row_col_start, extent_true, extent_pred, boundary_pred, t_ext,
     field_values = np.unique(instances_true)
 
     for field_value in field_values:
-
+        if field_value == 0:
+            continue
+        
         this_field = instances_true == field_value # makes a binary raster for the respective sampled IACS poylgon
         this_field_centroid = np.mean(np.column_stack(np.where(this_field)),axis=0).astype(int) # calculates the centroid of that polygon
 
@@ -819,3 +821,23 @@ def apply_seg_parameters(row_col_start, extent_pred, boundary_pred, result_dir, 
             
 
     print(f'Finished tile {row_col_start}')
+
+# for polygonization
+def unique_dict(unique_pairs_array):
+    valid_dict = {}
+
+    for key, value in unique_pairs_array:
+        if key in valid_dict:
+            valid_dict[key].append(value)
+        else:
+            valid_dict[key] = [value]
+
+    return valid_dict
+
+def make2000000(x):
+    s = str(x)
+    if len(s) == 7:
+        return int('2' + s[1:] )
+    else:
+        return int('2' + s[2:] )
+   

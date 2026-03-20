@@ -12,9 +12,12 @@ from FieldWaterUseTools.FuncBox.DICT_LIST import VALID_AGRO_VALUES
 ####################################################### Prepare
 states = ['Brandenburg', 'Niedersachsen', 'MV', 'NRW', 'Saarland']
 state_folders = ['BRB', 'LSA', 'MV', 'NRW', 'SL']
-model_names = ['model_state_FromScratch_IACS_dilate_False_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_22',
-               'model_state_IACS_dilate_False_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_40_on_AI4_RGB_exclude_True_38_FREEZER_2',
-               'model_state_IACS_dilate_True_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_40_on_AI4_RGB_exclude_True_38_FREEZER_2'] #'model_state_AI4_RGB_exclude_True_38'
+model_names = ['model_state_IACS_dilate_True_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_40_on_FromScratch_IACS_dilate_True_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_47_FREEZER_2']
+# ['model_state_FromScratch_IACS_dilate_False_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_22',
+#                'model_state_FromScratch_IACS_dilate_True_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_47',
+#                'model_state_IACS_dilate_False_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_40_on_AI4_RGB_exclude_True_38_FREEZER_2',
+#                'model_state_IACS_dilate_True_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_40_on_AI4_RGB_exclude_True_38_FREEZER_2'] 
+#'model_state_AI4_RGB_exclude_True_38'
 
 
 for model_name in model_names:
@@ -42,7 +45,7 @@ for model_name in model_names:
 
      # ####################################################### Predict
      print('start prediction')
-     predicted_chips_list = predict_on_GPU(f'{origin}fields/03_output/models/{model_name}.pth', row_col_ind, dat, 
+     predicted_chips_list = predict_on_GPU(f'{origin}fields/03_Output/models/{model_name}.pth', row_col_ind, dat, 
                                         temp_path=f'{predict_master_folder}temp/', batch_size=1)# model_state_All_but_LU_transformed_42
 
      ####################################################### Postprocess

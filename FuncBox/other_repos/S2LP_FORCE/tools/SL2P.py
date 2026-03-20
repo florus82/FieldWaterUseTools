@@ -1,11 +1,11 @@
 # SL2P.py
 import sys
-from tools import toolsNets
-from tools import dictionariesSL2P
-from tools import SL2PV0 as algorithm
+from . import toolsNets
+from . import dictionariesSL2P
+from . import SL2PV0 as algorithm
 import numpy
 from datetime import datetime
-from tools import read_sentinel2_safe_image # Used for legacy SAFE processing modes
+from . import read_sentinel2_safe_image # Used for legacy SAFE processing modes
 from skimage.transform import resize # *** CHANGE: New import for robust resizing of angle grids ***
 
 # main SL2P function (Entry point for processing)

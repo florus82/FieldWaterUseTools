@@ -15,15 +15,16 @@
                         all hourly from 2018-2025 (geopotential only one image)
 
 - DEM: ["COPERNICUS_30"] and derived slope, aspect (float)
-- Latitude and Longitude rasters @20m (float) (I would create them after we settled on tiling scheme)
+- Latitude and Longitude rasters @20m (float) 
 - Thuenen agricultural mask for Germany for 2018-2025 (https://eodata.thuenen.de/collections/crop-type-map-latest); already downloaded, have to be 'warped' to Sentinel-2 (preproccesing)
 
 
 ## Preprocessing
 - create a tiling system as processing across Germany probably too computaionally heavy
-- Sentinel-2 compositing
 - DEM (+derivates), Lat, Long, Thuenen all coregistered (warped) to Sentinel-2, same spatial extent and resolution (20m) (create only once?)
+- Sentinel-2 compositing
 - Sentinel-3 compositing (0° threshold, VZA, acquisition time, 2m ERA-5 air temperature)
+
 - Sentinel-3 sharpening (maybe including daily incidence calculation)
 - maybe add biophysical parameter derivation
 - Sentinel-3 will match other rasters after sharpening
