@@ -356,7 +356,7 @@ for l in range(len(counts_per_day)):
 
 
 
-    # ################# Time of observation of selected pixel --> needed for ERA5 stuff
+    # ################# Time of observation of selected pixel --> needed for ERA5
     time_slice = df[cumulative_day_counts_start[l]:cumulative_day_counts_end[l]].values
     timestamp_array = np.tile(time_slice, dat_LST.shape[:2] + (1,)) # don’t repeat along the time axis, just preserve it (1,) 
     
@@ -439,7 +439,5 @@ npTOdisk(arr=np.dstack(maxACQL_read), reference_path=path_to_airTemp_S3,
 
 
 
-# # # Sentinel-2 compositing and tiling
-# # ##### preprocessing that could be done once, if products could be stored:
-# # # prepare thuenen maps 
+# to be continued
 
