@@ -5,7 +5,6 @@ import requests
 import openeo
 import cdsapi
 
-
 from FieldWaterUseTools.FuncBox.Misc import getFilelist, path_safe
 from FieldWaterUseTools.FuncBox.DICT_LIST import REAL_INT_TO_MONTH
 
@@ -16,6 +15,7 @@ storPath_S2_template = path_safe(f"{storPath_master}DEM/FORCE_TILES/DEM/")
 storPath_S3_template = path_safe(f"{storPath_master}templates/S3_template.tif")
 storPath_ERA5 = path_safe(f"{storPath_master}ERA5/")
 path_to_geopot_raw = f"{storPath_ERA5}grib/geopotential/geopotential_unique.grib"
+path_to_Thuenen = path_safe(f"{storPath_master}Thuenen/")
 
 # set year and month for downloading S2 & S3 --> if we do the updates monthwise...
 YEAR = 2019
@@ -203,3 +203,33 @@ else:
         t = time.localtime()
         ti = time.strftime("%H:%M:%S", t)
         print(f"thrown at {ti}")
+
+
+########################################################################## Thuenen maps agriculture
+if len(getFilelist(path_to_Thuenen, '.tif')) > 0:
+    pass
+else:
+    print('do sth')
+    # paths
+    base_url = "https://box.hu-berlin.de"
+    share_token = "83a0a194e01e4693a353"
+
+    # get all files in shared folder
+    r = requests.get(
+        f"{base_url}/api/v2.1/share-links/{share_token}/dirents/",
+        params={"path": "/"},
+    )
+    r.raise_for_status()
+    files = r.json()["dirent_list"]
+    print(files)
+    # download each file
+    for f in files:
+        filename = f['file_name']
+        out_path_file = f"{path_to_Thuenen}{filename}"
+
+        download_url = f"{base_url}/d/{share_token}/files/?p=/{filename}&dl=1"
+        file_r = requests.get(download_url, timeout=120)
+        file_r.raise_for_status()
+        
+        with open(out_path_file, "wb") as fh:
+            fh.write(file_r.content)
