@@ -377,7 +377,7 @@ def warp_raster_to_reference(source_path, reference_path, output_path, resamplin
     if output_path == 'MEM':
         return warped_ds
     else:
-        print(f"Raster warped and saved to: {output_path}")
+        pass #print(f"Raster warped and saved to: {output_path}")
 
 
 def npTOdisk(arr, reference_path, outPath, bands = False, bandnames = False, noData = False, d_type = False):
@@ -675,3 +675,17 @@ def warp_np_to_reference(arr, arr_tif_path, target_tif_path, noData=np.nan, resa
                 out_ds.GetRasterBand(band + 1).WriteArray(warped_array[:,:,band])
 
     return warped_array
+
+
+############################ FROM RSS
+def get_query(start_date, end_date, wkt_bbox, stac_geoparquet):
+    """Generate SQL query for filtering STAC items by date and geometry."""
+    sql_where = f'(("datetime" BETWEEN \'{start_date}T00:00:00Z\' AND \'{end_date}T23:59:59Z\')) AND (ST_Intersects(geometry, ST_GeomFromText(\'{wkt_bbox}\')) )'
+    sql_query = f"SELECT * EXCLUDE(geometry),ST_AsWKB(geometry) as geometry FROM read_parquet('{stac_geoparquet}', union_by_name=False) WHERE {sql_where}"
+    return sql_query
+
+def add_sas_token(item, sas_token):
+    """Add SAS token to all asset URLs in a STAC item."""
+    for _, asset in item.assets.items():
+        asset.href = f"{asset.href}?{sas_token}"
+    return item

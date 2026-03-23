@@ -6,71 +6,72 @@ import openeo
 import cdsapi
 
 
-
-#origin = '/workspace/'
-import sys
-sys.path.append('/home/potzschf/repos/')
-origin =  '/data/Aldhani/eoagritwin/'
-#sys.path.append('/media/') # only needed to find FieldWaterUseTools on my machine
-
 from FieldWaterUseTools.FuncBox.Misc import getFilelist, path_safe
+from FieldWaterUseTools.FuncBox.DICT_LIST import REAL_INT_TO_MONTH
 
 
 # set masterpath for stored data
-storPath_master = path_safe(f"{origin}et/test/")#('/place/to/store/porducts/')
+storPath_master = path_safe('/place/to/store/porducts/')
 storPath_S2_template = path_safe(f"{storPath_master}DEM/FORCE_TILES/DEM/")
 storPath_S3_template = path_safe(f"{storPath_master}templates/S3_template.tif")
 storPath_ERA5 = path_safe(f"{storPath_master}ERA5/")
 path_to_geopot_raw = f"{storPath_ERA5}grib/geopotential/geopotential_unique.grib"
 
 # set year and month for downloading S2 & S3 --> if we do the updates monthwise...
-year = 2020
-month = 4
+YEAR = 2019
+MONTH = 4
 
 ########################################################################## templates of S2 and S3 images
 
-###### S2 (this is actually a DEM reprojected and resampled to match S2 data obtained by the FORCE (https://force-eo.readthedocs.io/en/latest/
-#           Furthermore, the entire image is cutted into smaller tiles (1500x1500). At the moment, we would proceed with this setup as it is not clear yet,
-#           if the FORCE might become available)
+###### S2 template (this is actually a DEM reprojected and resampled to match S2 data obtained by the FORCE (https://force-eo.readthedocs.io/en/latest/
+#      for the entirety of Germany. Furthermore, the entire image is cutted into smaller tiles (1500x1500). At the moment, we would proceed with this 
+#      setup as it is not clear yet, if the FORCE might become available)
 
-# paths
-# base_url = "https://box.hu-berlin.de"
-# share_token = "5501a12dad894b01b505"
 
-# # get all files in shared folder
-# r = requests.get(
-#     f"{base_url}/api/v2.1/share-links/{share_token}/dirents/",
-#     params={"path": "/"},
-# )
-# r.raise_for_status()
-# files = r.json()["dirent_list"]
+if len(getFilelist(storPath_S2_template, '.tif')) > 0:
+    pass
+else:
+    # paths
+    base_url = "https://box.hu-berlin.de"
+    share_token = "5501a12dad894b01b505"
 
-# # download each file
-# for f in files:
-#     filename = f['file_name']
-#     out_path_file = f"{storPath_S2_template}{filename}"
+    # get all files in shared folder
+    r = requests.get(
+        f"{base_url}/api/v2.1/share-links/{share_token}/dirents/",
+        params={"path": "/"},
+    )
+    r.raise_for_status()
+    files = r.json()["dirent_list"]
 
-#     download_url = f"{base_url}/d/{share_token}/files/?p=/{filename}&dl=1"
-#     file_r = requests.get(download_url, timeout=120)
-#     file_r.raise_for_status()
-    
-#     with open(out_path_file, "wb") as fh:
-#         fh.write(file_r.content)
+    # download each file
+    for f in files:
+        filename = f['file_name']
+        out_path_file = f"{storPath_S2_template}{filename}"
 
-# ###### S3
+        download_url = f"{base_url}/d/{share_token}/files/?p=/{filename}&dl=1"
+        file_r = requests.get(download_url, timeout=120)
+        file_r.raise_for_status()
+        
+        with open(out_path_file, "wb") as fh:
+            fh.write(file_r.content)
 
-# # fake header
-# headers = {
-#     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
-# }
-# # paths
-# s3_temp_url = "https://box.hu-berlin.de/seafhttp/f/25328869da9b425cb2f6/?op=view"
+###### S3
 
-# # download
-# r = requests.get(s3_temp_url, headers=headers, stream=True, timeout=120)
-# r.raise_for_status()
-# with open(storPath_S3_template, "wb") as f:
-#     f.write(r.content)
+if os.path.exists(storPath_S3_template):
+    pass
+else:
+    # fake header
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+    }
+    # paths
+    s3_temp_url = "https://box.hu-berlin.de/seafhttp/f/25328869da9b425cb2f6/?op=view"
+
+    # download
+    r = requests.get(s3_temp_url, headers=headers, stream=True, timeout=120)
+    r.raise_for_status()
+    with open(storPath_S3_template, "wb") as f:
+        f.write(r.content)
 
 
  
@@ -126,7 +127,7 @@ variables = [
 for variable in variables:
     
     varPath = path_safe(f"{storPath_ERA5}grib/{variable}")
-    storPath = f"{varPath}/{variable}_{year}_{month:02d}.grib"
+    storPath = f"{varPath}/{variable}_{YEAR}_{REAL_INT_TO_MONTH[MONTH]}.grib"
 
     if os.path.exists(storPath):
         pass
@@ -135,8 +136,8 @@ for variable in variables:
             request = {
                 "product_type": ["reanalysis"],
                 "variable": [variable],
-                "year": [year],
-                "month": [5],
+                "year": [YEAR],
+                "month": [MONTH],
                 "day": [
                     "01", "02", "03",
                     "04", "05", "06",
@@ -184,7 +185,7 @@ else:
             "product_type": ["reanalysis"],
             "variable": ["geopotential"],
             "year": [2020],
-            "month": [month],
+            "month": [MONTH],
             "day": ["01"],
             "time": ["13:00"],
             "data_format": "grib",

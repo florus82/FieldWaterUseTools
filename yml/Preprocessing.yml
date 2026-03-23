@@ -1,0 +1,31 @@
+name: do_preprocessing
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - xdem
+  - geoutils>=0.0.13
+  - geopandas
+  - numpy
+  - xarray
+  - gdal
+  - libgdal-grib
+  - rasterio
+  - fiona
+  - shapely
+  - pyproj
+  - pandas
+  - pvlib
+  - scikit-image
+  - tqdm
+  - fsspec
+  - duckdb
+  - pystac
+  - rioxarray
+  - adlfs
+  - odc-stac
+  - odc-geo
+  - pip
+  - pip:
+      - git+https://github.com/hectornieto/pyPro4Sail.git
+      - stac-geoparquet

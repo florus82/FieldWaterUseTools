@@ -32,7 +32,7 @@
 ## Apply model
 - the model will be run per Sentinel-2 composite per spatial tile (or for the entirety of Germany if computing power can handle it! The sharpening appears to be the bottleneck)
 - starting from the data of the composite, all Sentinel-3 LST images that fall within 9day threshold (+/- 4 days of composite date) will be sharpened
-- 
+
 
 ## Questions transfer
 - so far, we use the FORCE algorithm (https://force-eo.readthedocs.io/en/latest/) on our in-house Sentinel-2 datacube and our whole pipelin is based on its tiling scheme
