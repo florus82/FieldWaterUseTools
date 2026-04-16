@@ -12,7 +12,7 @@ if(LOCAL_R == TRUE){
   home = 'Y:/'
 }
 
-storPath = paste0(home, 'repos/FieldWaterUseTools/fieldTools/')
+storPath = paste0(origin, 'fields/Misc/grid_search_plots/')
 state = "Brandenburg"
 
 models = c(
@@ -33,7 +33,8 @@ mod_id = c(
 
 year = "2023"
 
-i=1
+conti_max = list()
+
 for (i in seq_along(models)){
  
   mod_name = mod_id[i]
@@ -50,7 +51,7 @@ for (i in seq_along(models)){
   }
   
   conti_all <- bind_rows(conti, .id = "source_folder") %>% 
-    filter(reference_field_IDs != 0)
+    filter(reference_field_IDs != 0) # if the background was falsely labeled as field (in IACS)
   rm(conti)
   
 
@@ -131,18 +132,26 @@ for (i in seq_along(models)){
                             'Ov > 50% Pred & IACS' = "3",
                             'No restrict' = "4"))
 
+  max_vals = blocks_all %>% 
+    group_by(orig, source_folder, metric) %>%
+    filter(value == max(value)) %>%
+    ungroup()
+  
   varis = unique(blocks_all$metric)
 
   for (j in seq_along(varis)){
   
     vari = varis[j]
+    max_vals_sub = max_vals %>% 
+      filter(metric == vari)
     
     p <- blocks_all %>%
       filter(source_folder %in% c('ThuenenMask_256_20', 'unmasked_chips_256_20'),
              metric == vari) %>%
       ggplot(aes(x = t_ext, y = t_bound, fill = value)) +
       geom_tile() +
-      geom_text(aes(label = round(value*10000, 0)), color = 'red', size = 3) +
+      geom_text(aes(label = round(value, 3)), color = 'red', size = 3) +
+      geom_text(data=max_vals_sub, aes(label = round(value, 3)), color = 'black', size = 3) +
       facet_wrap(source_folder ~ orig, ncol = 4) +
       scale_fill_viridis_c() +
       labs(
@@ -176,6 +185,7 @@ for (i in seq_along(models)){
       ggplot(aes(x = t_ext, y = t_bound, fill = value)) +
       geom_tile() +
       geom_text(aes(label = sample_size), color = 'black', size = 3) +
+      geom_text(data=max_vals_sub, aes(label = sample_size), color = 'red', size = 3) +
       facet_wrap(source_folder ~ orig, ncol = 4) +
       scale_fill_viridis_c() +
       labs(
@@ -202,12 +212,14 @@ for (i in seq_along(models)){
            units = "cm",
            bg = 'grey')
   }
+  max_vals$model = mod_name
+  conti_max[[i]] = max_vals
   print('Next model')
 }
 
+max_vals_all = bind_rows(conti_max)
 
-
-
+write.csv(max_vals_all, paste0(storPath,'maxVals.csv'), row.names = F)
 
 
 ############################################################### legacy

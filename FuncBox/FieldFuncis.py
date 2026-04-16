@@ -834,9 +834,9 @@ def unique_dict(unique_pairs_array):
 
     return valid_dict
 
-def make2000000(x):
+def make2000000000(x):
     s = str(x)
-    if len(s) == 7:
+    if len(s) == 10:
         return int('2' + s[1:] )
     else:
         return int('2' + s[2:] )

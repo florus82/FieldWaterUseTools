@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import random
 
-from osgeo import gdal, osr
+from osgeo import gdal, osr, ogr
 from datetime import datetime, timezone
 
 
@@ -676,6 +676,47 @@ def warp_np_to_reference(arr, arr_tif_path, target_tif_path, noData=np.nan, resa
 
     return warped_array
 
+def assert_same_length(*lists): # * accepts any number of positional arguments and packs them into a tuple
+    lengths = list(map(len, lists))
+    if len(set(lengths)) != 1:
+        raise ValueError(f"Lists have different lengths: {lengths}")
+    
+def getSpatRefRas(layer):
+    # check type of layer
+    if type(layer) is gdal.Dataset:
+        SPRef = osr.SpatialReference()
+        SPRef.ImportFromWkt(layer.GetProjection())
+
+    elif type(layer) is str:
+        lyr   = gdal.Open(layer)
+        SPRef = osr.SpatialReference()
+        SPRef.ImportFromWkt(lyr.GetProjection())
+
+    return(SPRef)
+
+def getSpatRefVec(layer):
+
+    # check the type of layer
+    if type(layer) is ogr.Geometry:
+        SPRef   = layer.GetSpatialReference()
+
+    elif type(layer) is ogr.Feature:
+        lyrRef  = layer.GetGeometryRef()
+        SPRef   = lyrRef.GetSpatialReference()
+
+    elif type(layer) is ogr.Layer:
+        SPRef   = layer.GetSpatialRef()
+
+    elif type(layer) is ogr.DataSource:
+        lyr     = layer.GetLayer(0)
+        SPRef   = lyr.GetSpatialRef()
+
+    elif type(layer) is str:
+        lyrOpen = ogr.Open(layer)
+        lyr     = lyrOpen.GetLayer(0)
+        SPRef   = lyr.GetSpatialRef()
+
+    return(SPRef)
 
 ############################ FROM RSS
 def get_query(start_date, end_date, wkt_bbox, stac_geoparquet):
