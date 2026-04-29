@@ -272,29 +272,29 @@ for idx, state in enumerate(states):
     del out_ds
     print('fields poylgonized')
 
-    # donwsample
-    gdal.Warp("/vsimem/resampled.tif", raster_ds, xRes=2.5, yRes=2.5, resampleAlg='lanczos')
-    resampled_ds = gdal.Open("/vsimem/resampled.tif")
-    src_band = resampled_ds.GetRasterBand(1)
-    resampled_relabelled_masked = src_band.ReadAsArray()
-    rows, cols = resampled_relabelled_masked.shape
-    # create a mask for the background (otherwise it would get a polygon as well)
-    mask_array = (resampled_relabelled_masked != 0).astype(np.uint8)
-    mask_ds = driver_mem_ras.Create('', cols, rows, 1, gdal.GDT_Int32)
-    mask_ds.GetRasterBand(1).WriteArray(mask_array)
-    mask_band = mask_ds.GetRasterBand(1)
-    del mask_array
+    # # donwsample
+    # gdal.Warp("/vsimem/resampled.tif", raster_ds, xRes=2.5, yRes=2.5, resampleAlg='lanczos')
+    # resampled_ds = gdal.Open("/vsimem/resampled.tif")
+    # src_band = resampled_ds.GetRasterBand(1)
+    # resampled_relabelled_masked = src_band.ReadAsArray()
+    # rows, cols = resampled_relabelled_masked.shape
+    # # create a mask for the background (otherwise it would get a polygon as well)
+    # mask_array = (resampled_relabelled_masked != 0).astype(np.uint8)
+    # mask_ds = driver_mem_ras.Create('', cols, rows, 1, gdal.GDT_Int32)
+    # mask_ds.GetRasterBand(1).WriteArray(mask_array)
+    # mask_band = mask_ds.GetRasterBand(1)
+    # del mask_array
 
-    # create output 
-    out_ds = driver_gpkg.CreateDataSource(f'{outPath}{maskVersions[idx]}_{para_id}_resampled_2_5m.gpkg')  # Output vector file
-    out_layer = out_ds.CreateLayer('polygons', getSpatRefRas(ds), geom_type=ogr.wkbPolygon)
-    field_defn = ogr.FieldDefn('FieldID', ogr.OFTInteger)
-    out_layer.CreateField(field_defn)
+    # # create output 
+    # out_ds = driver_gpkg.CreateDataSource(f'{outPath}{maskVersions[idx]}_{para_id}_resampled_2_5m.gpkg')  # Output vector file
+    # out_layer = out_ds.CreateLayer('polygons', getSpatRefRas(ds), geom_type=ogr.wkbPolygon)
+    # field_defn = ogr.FieldDefn('FieldID', ogr.OFTInteger)
+    # out_layer.CreateField(field_defn)
 
-    # polygonize
-    gdal.Polygonize(src_band, mask_band, out_layer, 0, [], callback=None)
-    del out_ds
-    print('fields poylgonized')
+    # # polygonize
+    # gdal.Polygonize(src_band, mask_band, out_layer, 0, [], callback=None)
+    # del out_ds
+    # print('fields poylgonized')
 
 
     # clean up temp folder

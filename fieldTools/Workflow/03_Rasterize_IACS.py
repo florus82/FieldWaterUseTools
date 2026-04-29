@@ -4,7 +4,7 @@ origin = '/workspace/'
 sys.path.append('/media/')
 
 
-from FieldWaterUseTools.FuncBox.Misc import getFilelist, path_safe
+from FieldWaterUseTools.FuncBox.Misc import getFilelist, path_safe, dirfinder
 from FieldWaterUseTools.FuncBox.Polygons_to_Labels import *
 from FieldWaterUseTools.FuncBox.DICT_LIST import EXCLUDE_LIST
 from FieldWaterUseTools.FuncBox.ForceFuncis import force_order_Colors_for_VRT, force_to_vrt, reduce_forceTSA_output_to_validmonths
@@ -26,11 +26,11 @@ state = state_lkup[fed_state][0]
 state_year = f'{state}_{year}'
 
 
-polygon_path = [file for file in getFilelist(f'/data/{origin}fields/IACS/1_Polygons/{state_lkup[fed_state][0]}/',\
+polygon_path = [file for file in getFilelist(f"{origin}fields/01_IACS/1_Polygons/{state_lkup[fed_state][0]}/",\
                                              state_lkup[fed_state][1]) if str(year) in file][0]
 
-vrt_out = path_safe(f'/data/{origin}fields/Auxiliary/vrt/{state}/{year}/')
-reduced_files = reduce_forceTSA_output_to_validmonths(f'/data/{origin}force/output/{state}/{year}/', 3, 8)
+vrt_out = path_safe(f"{origin}fields/Misc/S2vrt/{state}/{year}/")
+reduced_files = reduce_forceTSA_output_to_validmonths(f"{origin}force/output/{state}/{year}/", 3, 8)
 ordered_files = force_order_Colors_for_VRT(reduced_files, ['BLU', 'GRN', 'RED', 'BNR'], [f'MONTH-{d:02d}' for d in range(3,9,1)])
 
 
@@ -44,13 +44,13 @@ else:
     force_to_vrt(reduced_files, ordered_files, vrt_out, True, bandnames=['BLU', 'GRN', 'RED', 'BNR'])
 
 
-vrt_path = getFilelist(f"/data/{origin}fields/Auxiliary/vrt/{state}/{year}/{dirfinder(f'/data/{origin}/fields/Auxiliary/vrt/{state}/{year}/')[0]}",
+vrt_path = getFilelist(f"{vrt_out}{dirfinder(vrt_out)[0]}",
                        '.vrt', deep=True)[0]
 
 
-lines_out_gpkg_path = f'/data/{origin}fields/IACS/2_Lines/{state}/{year}/IACS_{state_year}.gpkg'
-raster_lines_out_path = f'/data/{origin}fields/IACS/3_Rasterized_lines/{state}/{year}/IACS_{state_year}'
-crop_mask_out_path = f'/data/{origin}fields/IACS/4_Crop_mask/{state}/{year}/IACS_{state_year}_cropMask'
+lines_out_gpkg_path = f"{origin}fields/01_IACS/2_Lines/{state}/{year}/IACS_{state_year}.gpkg"
+raster_lines_out_path = f"{origin}fields/01_IACS/3_Rasterized_lines/{state}/{year}/IACS_{state_year}"
+crop_mask_out_path = f"{origin}fields/01_IACS/4_Crop_mask/{state}/{year}/IACS_{state_year}_cropMask"
 # convert lines to polyongs
 polygons_to_lines(polygon_path,
                   path_safe(lines_out_gpkg_path),
