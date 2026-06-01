@@ -119,3 +119,20 @@ EXCLUDE_LIST = ['',
  'unmaintained',
  'vorübergehend unbefestigte Mieten-, Stroh-, Futter oder Dunglagerplätze auf DGL',
  'vorübergehende, unbefestigte Mieten-, Stroh-, Futter oder Dunglagerplätze auf AL']
+
+
+EXCLUDE_LIST_FTW = ['afforestation_reforestation',
+                    'apples',
+                    'cherry_cherries',
+                    'fallow_land_not_crop',
+                    'greenhouse_foil_film',
+                    'hazelnuts_hazel',
+                    'not_known_and_other',
+                    'nurseries_nursery',
+                    'orchards_fruits',
+                    'other_permanent_crops_plantations',
+                    'pasture_meadow_grassland_grass',
+                    'tree_wood_forest',
+                    'unmaintained',
+                    'vineyards_wine_vine_rebland_grapes',
+                    'walnuts']

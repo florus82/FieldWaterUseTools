@@ -1,5 +1,6 @@
 import sys
 import os
+from skimage import measure
 origin = '/workspace/'
 sys.path.append('/media/')
 
@@ -21,7 +22,7 @@ state_lkup = {'Brandenburg': ['BRB', '.geoparquet', 'EC_hcat_n'],
 
 
 year = 2023
-
+labelling = True
 state = state_lkup[fed_state][0]
 state_year = f'{state}_{year}'
 
@@ -58,22 +59,22 @@ polygons_to_lines(polygon_path,
                   category_col=state_lkup[fed_state][2])
 
 # rasterize lines
-rasterize_lines(lines_out_gpkg_path, 
-                vrt_path, 
-                path_safe(f'{raster_lines_out_path}_lines_touch_true.tif'), all_touch=True)
+# rasterize_lines(lines_out_gpkg_path, 
+#                 vrt_path, 
+#                 path_safe(f'{raster_lines_out_path}_lines_touch_true.tif'), all_touch=True)
 
 rasterize_lines(lines_out_gpkg_path,
                 vrt_path, 
                 path_safe(f'{raster_lines_out_path}_lines_touch_false.tif'), all_touch=False)
 
 # make a crop mask
-make_crop_mask(path_to_polygon=polygon_path, 
-               path_to_rasterized_lines=f'{raster_lines_out_path}_lines_touch_true.tif', 
-               path_to_extent_raster=vrt_path, 
-               path_to_mask_out=path_safe(f'{crop_mask_out_path}_lines_touch_true_crop_touch_true.tif'),
-               all_touch=True,
-               categories=EXCLUDE_LIST,
-               category_col=state_lkup[fed_state][2])
+# make_crop_mask(path_to_polygon=polygon_path, 
+#                path_to_rasterized_lines=f'{raster_lines_out_path}_lines_touch_true.tif', 
+#                path_to_extent_raster=vrt_path, 
+#                path_to_mask_out=path_safe(f'{crop_mask_out_path}_lines_touch_true_crop_touch_true.tif'),
+#                all_touch=True,
+#                categories=EXCLUDE_LIST,
+#                category_col=state_lkup[fed_state][2])
 
 make_crop_mask(path_to_polygon=polygon_path, 
                path_to_rasterized_lines=f'{raster_lines_out_path}_lines_touch_false.tif', 
@@ -84,15 +85,13 @@ make_crop_mask(path_to_polygon=polygon_path,
                category_col=state_lkup[fed_state][2])
 
 
-
-
-make_crop_mask(path_to_polygon=polygon_path, 
-               path_to_rasterized_lines= f'{raster_lines_out_path}_lines_touch_true.tif', 
-               path_to_extent_raster=vrt_path, 
-               path_to_mask_out=path_safe(f'{crop_mask_out_path}_cropMask_lines_touch_true_crop_touch_false.tif'),
-               all_touch=False,
-               categories=EXCLUDE_LIST,
-               category_col=state_lkup[fed_state][2])
+# make_crop_mask(path_to_polygon=polygon_path, 
+#                path_to_rasterized_lines= f'{raster_lines_out_path}_lines_touch_true.tif', 
+#                path_to_extent_raster=vrt_path, 
+#                path_to_mask_out=path_safe(f'{crop_mask_out_path}_cropMask_lines_touch_true_crop_touch_false.tif'),
+#                all_touch=False,
+#                categories=EXCLUDE_LIST,
+#                category_col=state_lkup[fed_state][2])
 
 make_crop_mask(path_to_polygon=polygon_path, 
                path_to_rasterized_lines= f'{raster_lines_out_path}_lines_touch_false.tif', 
@@ -102,6 +101,18 @@ make_crop_mask(path_to_polygon=polygon_path,
                categories=EXCLUDE_LIST,
                category_col=state_lkup[fed_state][2])
 
+if labelling:
+    ds = gdal.Open(f"{crop_mask_out_path}_cropMask_lines_touch_false_crop_touch_false_linecrop.tif")
+    ds_ras = ds.GetRasterBand(1).ReadAsArray()
+    relabelled = measure.label(ds_ras, background=0, connectivity=1)
+
+    out_ds = gdal.GetDriverByName('GTiff').Create(
+        f"{crop_mask_out_path}_cropMask_lines_touch_false_crop_touch_false_linecrop_LABELLED.tif",
+                  ds.RasterXSize, ds.RasterYSize, 1, gdal.GDT_Int32)
+    out_ds.SetGeoTransform(ds.GetGeoTransform())
+    out_ds.SetProjection(ds.GetProjection())
+    out_ds.GetRasterBand(1).WriteArray(relabelled)
+    del out_ds
 
 
 # # This should happen at tile level, when we use S2 to finetune model --> labels needed for training

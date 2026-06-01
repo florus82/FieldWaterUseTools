@@ -245,7 +245,7 @@ for idx, state in enumerate(states):
 
     # create an in-memory raster-band with geoinfo of the relabelled array
     rows, cols = relabelled.shape
-    relabelled_masked = relabelled * aoi_mask_arr
+    relabelled_masked = relabelled * aoi_mask_arr # think here about on how to avoid cutting of fields at the edges!!!!
     del relabelled, block
 
     raster_ds = driver_mem_ras.Create('', cols, rows, 1, gdal.GDT_Int32)
@@ -259,7 +259,7 @@ for idx, state in enumerate(states):
     mask_ds = driver_mem_ras.Create('', cols, rows, 1, gdal.GDT_Int32)
     mask_ds.GetRasterBand(1).WriteArray(mask_array)
     mask_band = mask_ds.GetRasterBand(1)
-    del mask_array
+    
 
     # create output 
     out_ds = driver_gpkg.CreateDataSource(f'{outPath}{maskVersions[idx]}_{para_id}_10m.gpkg')  # Output vector file
@@ -272,6 +272,14 @@ for idx, state in enumerate(states):
     del out_ds
     print('fields poylgonized')
 
+    # store a masked version of rasterized and relabelled IACS 
+    out_ds = gdal.GetDriverByName('GTiff').Create(path_safe(f"{seg_path}relabelled/{state}_{models[idx]}_{year}_{maskVersions[idx]}_{para_id}.tif"), cols, rows, 1, gdal.GDT_Int32)
+    out_ds.SetGeoTransform(ds.GetGeoTransform())
+    out_ds.SetProjection(ds.GetProjection())
+    out_ds.GetRasterBand(1).WriteArray(relabelled_masked * mask_array)
+    del out_ds
+  
+        
     # # donwsample
     # gdal.Warp("/vsimem/resampled.tif", raster_ds, xRes=2.5, yRes=2.5, resampleAlg='lanczos')
     # resampled_ds = gdal.Open("/vsimem/resampled.tif")
