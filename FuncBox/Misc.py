@@ -718,6 +718,10 @@ def getSpatRefVec(layer):
 
     return(SPRef)
 
+def RasterKiller(raster_path):
+    if os.path.isfile(raster_path):
+        os.remove(raster_path)
+
 ############################ FROM RSS
 def get_query(start_date, end_date, wkt_bbox, stac_geoparquet):
     """Generate SQL query for filtering STAC items by date and geometry."""

@@ -436,7 +436,7 @@ def subset_mask_to_prediction_extent(path_reference_mask, path_to_prediction_vrt
 
     # check if mask has different extent from prediction
     # if so, make it the same extent for further processing (classification)
-    # --> mask can never be smaller than prediciton, therefore no need to check
+    # --> mask can never be smaller than prediciton, therefore no need to check # not true for extent of germany
 
     ext_mask = getExtentRas(path_reference_mask)
     ext_pred = getExtentRas(path_to_prediction_vrt)
@@ -512,7 +512,7 @@ def export_GPU_predictions(list_of_predictions, path_to_mask, vrt_path, list_of_
         out_ds.SetGeoTransform(tuple(geotf))
         out_ds.SetProjection(vrt_ds.GetProjection())
 
-        arr = list_of_predictions[i].transpose(1, 2, 0) # [i][0]
+        arr = list_of_predictions[i][0].transpose(1, 2, 0) # [i][0]
         for band in range(3):
             out_ds.GetRasterBand(band + 1).WriteArray(arr[int(overlap/2): -int(overlap/2), int(overlap/2): -int(overlap/2), band])
         del out_ds
@@ -522,6 +522,8 @@ def export_GPU_predictions(list_of_predictions, path_to_mask, vrt_path, list_of_
     # check if mask is a list or single mask
     if isinstance(path_to_mask, list):
         pass
+    elif path_to_mask == 'no mask':
+        return
     else:
         path_to_mask = [path_to_mask]
 
@@ -546,7 +548,7 @@ def export_GPU_predictions(list_of_predictions, path_to_mask, vrt_path, list_of_
             out_ds.SetGeoTransform(tuple(geotf))
             out_ds.SetProjection(vrt_ds.GetProjection())
 
-            arr = list_of_predictions[i].transpose(1, 2, 0) # [i][0]
+            arr = list_of_predictions[i][0].transpose(1, 2, 0) # [i][0]
 
             maskSub = mask[int(int(file.split('Y_')[-1].split('.')[0]) + overlap/2):chipsize + int(int(file.split('Y_')[-1].split('.')[0]) - overlap/2), 
                         int(int(file.split('X_')[-1].split('_')[0]) + overlap/2):chipsize + int(int(file.split('X_')[-1].split('_')[0]) - overlap/2)]
@@ -798,7 +800,7 @@ def get_IoUs_per_Tile(row_col_start, extent_true, extent_pred, boundary_pred, re
 
 def apply_seg_parameters(row_col_start, extent_pred, boundary_pred, result_dir, result_name, dummy_gt, dummy_proj, t_ext, t_bound):
     
-    print(f'Starting on tile {row_col_start} for {result_dir}')
+    # print(f'Starting on tile {row_col_start} for {result_dir}')
     
     if isinstance(t_ext, list):
         t_exts = t_ext
@@ -820,7 +822,7 @@ def apply_seg_parameters(row_col_start, extent_pred, boundary_pred, result_dir, 
 
             
 
-    print(f'Finished tile {row_col_start}')
+    # print(f'Finished tile {row_col_start}')
 
 # for polygonization
 def unique_dict(unique_pairs_array):
@@ -840,4 +842,85 @@ def make2000000000(x):
         return int('2' + s[1:] )
     else:
         return int('2' + s[2:] )
-   
+
+
+def predict_on_GPU_without_preload(path_to_model, list_of_row_col_indices, list_of_vrts, temp_path = False):
+    '''
+    path_to_model: path to .pth file
+    list_of_row_col_indices: a list in the order row_start, row_end, col_start, col_end (output of get_row_col_indices). This will be used to read in small chips from npdstack
+    list_of_vrtFiles for input stack: has to be read-in and normalized
+    '''
+
+    normalizer = AI4BNormal_S2()
+
+    row_start = list_of_row_col_indices[0]
+    row_end   = list_of_row_col_indices[1]
+    col_start = list_of_row_col_indices[2]
+    col_end   = list_of_row_col_indices[3]
+
+    # define the model (.pth) and assess loss curves
+    #model_name = dataFolder + 'output/models/model_state_All_but_LU_transformed_42.pth'
+    model_name_short = path_to_model.split('/')[-1].split('.')[0]
+ 
+    NClasses = 1
+    nf = 96
+    verbose = True
+    model_config = {'in_channels': 4,
+                    'spatial_size_init': (128, 128),
+                    'depths': [2, 2, 5, 2],
+                    'nfilters_init': nf,
+                    'nheads_start': nf // 4,
+                    'NClasses': NClasses,
+                    'verbose': verbose,
+                    'segm_act': 'sigmoid'}
+
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+    if torch.cuda.is_available():
+        modeli = ptavit3d_dn(**model_config).to(device)
+        modeli.load_state_dict(torch.load(path_to_model))
+        model = modeli.to(device) # Set model to gpu
+        model.eval()
+        
+    preds = []
+
+    for i in range(len(row_end)):
+        for j in range(len(col_end)):
+            bands = []
+            for vrt in list_of_vrts:
+                ds = gdal.Open(vrt, gdal.GA_ReadOnly)
+                bands.append(
+                    ds.GetRasterBand(1).ReadAsArray(col_start[j], row_start[i], col_end[j] - col_start[j], row_end[i] - row_start[i])
+                )
+            cube = np.dstack(bands)  # (y, x, bands)
+
+            data_cube = np.transpose(cube, (2, 0, 1))
+            reshaped_cube = data_cube.reshape(4, 6, cube.shape[0], cube.shape[1])
+            
+            norm_cube = normalizer(reshaped_cube)
+
+            image = torch.tensor(norm_cube) # npdstack[np.newaxis, :, :, row_start[i]:row_end[i], col_start[j]:col_end[j]])
+            image = image.to(torch.float)
+            image = image.unsqueeze(0).to(device)  # Move image to the correct device
+        
+            with torch.no_grad():
+                pred = model(image)
+                preds.append(pred.detach().cpu().numpy())
+
+                print(f"{i} from {len(row_end)} and {j} from {len(col_end)}")
+                
+    torch.cuda.empty_cache()
+    del model
+    del modeli
+    del device
+    del image
+
+    if temp_path:
+        with open(path_safe(f'{temp_path}preds.pkl'), 'wb') as f:
+            pickle.dump(preds, f)
+
+    # Load again
+    # with open(f'{temp_path}preds.pkl', 'rb') as f:
+    #     preds = pickle.load(f)
+
+    return preds
