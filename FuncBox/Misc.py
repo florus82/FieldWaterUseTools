@@ -585,7 +585,7 @@ def makePyramidsForTif(tif_path):
     print('pyramids created')
 
 
-def warp_np_to_reference(arr, arr_tif_path, target_tif_path, noData=np.nan, resamp=gdal.GRA_Bilinear, output_path=None):
+def warp_np_to_reference(arr, arr_tif_path, target_tif_path, noData=np.nan, resamp=gdal.GRA_Bilinear, output_path=None, band_names=False):
     """
     Warps a NumPy array to the spatial resolution, projection, and extent of a target tif. Therefore, a path to a tif that holds the geoinfo of the array
     must be provided. Returns the warped array, while export as tif is optional.
@@ -597,6 +597,7 @@ def warp_np_to_reference(arr, arr_tif_path, target_tif_path, noData=np.nan, resa
         noData (numeric): Value of array that represents the noData value. Defaults to np.nan.
         resamp (gdal.GRA_, optional): Algorythm that should be used for resampling. Defaults to gdal.GRA_Bilinear.
         output_path (str, optional): If provided, the warped array will be stored as tiff at this location. Defaults to None.
+        band_names (list, optional): If provided, bands in output tif will get these names
     """
     # determine whether arr has more than one band  
     arrDim = len(arr.shape)
@@ -664,6 +665,8 @@ def warp_np_to_reference(arr, arr_tif_path, target_tif_path, noData=np.nan, resa
         if output_path:
             out_ds.GetRasterBand(1).WriteArray(warped_array)
             out_ds.GetRasterBand(1).SetNoDataValue(noData)
+            if band_names:
+                out_ds.GetRasterBand(1).SetDescription(band_names[0])
     else:
         warpL = []
         for band in range(arr.shape[2]):
@@ -673,6 +676,9 @@ def warp_np_to_reference(arr, arr_tif_path, target_tif_path, noData=np.nan, resa
             for band in range(arr.shape[2]):
                 out_ds.GetRasterBand(band + 1).SetNoDataValue(noData)
                 out_ds.GetRasterBand(band + 1).WriteArray(warped_array[:,:,band])
+            if band_names:
+                for idx, bname in enumerate(band_names):
+                    out_ds.GetRasterBand(idx + 1).SetDescription(bname)
 
     return warped_array
 
