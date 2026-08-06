@@ -118,7 +118,20 @@ EXCLUDE_LIST = ['',
  'tree_wood_forest',
  'unmaintained',
  'vorübergehend unbefestigte Mieten-, Stroh-, Futter oder Dunglagerplätze auf DGL',
- 'vorübergehende, unbefestigte Mieten-, Stroh-, Futter oder Dunglagerplätze auf AL']
+ 'vorübergehende, unbefestigte Mieten-, Stroh-, Futter oder Dunglagerplätze auf AL',
+ 'Hecke/Knick (CC-LE)',
+ 'Hecke/Knick (LE)', 
+ 'Feldgehölz (CC-LE)', 
+ 'Feldgehölz (LE)', 
+ 'Feuchtgebiet (CC-LE)', 
+ 'Feldrain (LE)', 
+ 'Feldrain (CC-LE)', 
+ 'Fels-, Steinriegel, naturversteinte Fläche (CC-LE)', 
+ 'Trocken-, Natursteinmauer, Lesesteinwall (CC-LE)', 
+ 'Tümpel, Söll, Doline (CC-LE)',
+ 'Baumreihe (CC-LE)',
+ 'Graben (LE)',
+ 'nicht landw. Fläche']
 
 
 EXCLUDE_LIST_FTW = ['afforestation_reforestation',

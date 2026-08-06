@@ -19,7 +19,7 @@ from FieldWaterUseTools.FuncBox.Misc import shuffle2Lists
 dilate = 'True'
 overlap = 'with'
 # set the rocksdb on which training will be performed
-db_name = f"FromScratch_IACS_dilate_{dilate}_BorderEdgeCutted_RGB_NDVI_exclude_True_{overlap}_overlap"
+db_name = f"FromScratch_IACS_dilate_{dilate}_BW_BorderEdgeCutted_RGB_NDVI_exclude_True_{overlap}_overlap"
 print(f'learn with {db_name}')
 
 # create output dictionary
@@ -63,7 +63,7 @@ def train(args):
     scaler = GradScaler()
 
     train_valid_split = 0.75
-    train_ds_path = f"{origin}fields/02_Chips_generated_from_IACS/Fine_dilate_{dilate}/"
+    train_ds_path = f"{origin}fields/02_Chips_generated_from_IACS/Fine_dilate_{dilate}_BW/"
     imgs_list = getFilelist(train_ds_path, '.nc', deep=True)
     masks_list = getFilelist(train_ds_path, '.tif', deep=True)
 

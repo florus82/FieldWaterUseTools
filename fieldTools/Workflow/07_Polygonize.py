@@ -19,11 +19,11 @@ from FieldWaterUseTools.FuncBox.Misc import assert_same_length, getFilelist, pat
 
 # set paths and parameter
 year = 2023
-states = ['Brandenburg', 'Brandenburg']
-models = ['FromScratch_dilate_T', 'FromScratch_dilate_T']
-t_exts = ['03', '03']
-t_bounds = ['01', '01']
-maskVersions = ['ThuenenMasked', 'UnMasked']
+states = ['Brandenburg']#, 'Brandenburg']
+models = ['FromScratch_dilate_T']#, 'FromScratch_dilate_T']
+t_exts = ['07']#, '03']
+t_bounds = ['01']#, '01']
+maskVersions = ['ThuenenMasked']#, 'UnMasked']
 
 assert_same_length(states, models, t_exts, t_bounds, maskVersions)
 

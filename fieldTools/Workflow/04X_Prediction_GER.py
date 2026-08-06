@@ -17,7 +17,7 @@ import zipfile
 ####################################################### Prepare
 model_name = 'model_state_FromScratch_IACS_dilate_True_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_47'
 model_path = f"{origin}fields/03_Output/models/{model_name}.pth"
-year = 2021
+year = 2025
 colorList = ['BLUE', 'GREEN', 'RED', 'BROADNIR']
 
 # make vrts from force outputs for easier processing
@@ -51,13 +51,13 @@ overlap  = 20
 
 row_col_ind = get_row_col_indices(chipsize, overlap, vrt_ds.RasterYSize, vrt_ds.RasterXSize)
 
-# ####################################################### Predict
+####################################################### Predict
 print('start prediction')
 predicted_chips_list = predict_on_GPU_without_preload(model_path, row_col_ind, vrtFiles, 
                                       temp_path=f'{predict_master_folder}temp/')
 
 
-  # export the predicted chips (masked and not masked)
+# export the predicted chips (masked and not masked)
 print('predicted - write away to temp')
 with open(f'{predict_master_folder}temp/preds.pkl', 'rb') as f:
     predicted_chips_list = pickle.load(f)
@@ -179,6 +179,7 @@ for file in files:
                 dst.write(stack)
 
 # make vrt of masked chips
+print('vrt of masked chips')
 predicted_chips_to_vrt(f"{predict_master_folder}chips_folder/", 'masked_chips', 256, 20, path_safe(f"{predict_master_folder}vrt/"), pyramids=True)
 
 # zip masked chips
@@ -202,6 +203,7 @@ def zip_chunk(args):
         for tif_path in chunk:
             zf.write(tif_path, arcname=os.path.basename(tif_path))
 
+print('zipping masked chips')
 with ProcessPoolExecutor(max_workers=30) as executor:
     executor.map(
         zip_chunk,
@@ -210,6 +212,7 @@ with ProcessPoolExecutor(max_workers=30) as executor:
 
 
 # export vector of chips
+print('exporting shapes masked chips')
 gdf = gpd.GeoDataFrame(conti, geometry="geometry", crs=conti[0]["crs_used"])
 gdf.to_file(f"{predict_master_folder}{year}_grid_tiles.gpkg", driver="GPKG", layer="tiles")
 

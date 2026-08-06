@@ -14,6 +14,7 @@ from FieldWaterUseTools.FuncBox.ForceFuncis import force_order_Colors_for_VRT, f
     force_to_vrt
 from FieldWaterUseTools.FuncBox.Polygons_to_Labels import *
 from FieldWaterUseTools.FuncBox.Misc import get_row_col_indices, stackReader, stack_tifs, dirfinder
+from FieldWaterUseTools.FuncBox.DICT_LIST import EXCLUDE_LIST
 
 
 ################################################ create the images as nc and labels as tif files
@@ -24,33 +25,38 @@ if do_dilate:
 else:
     suffix = 'False'
 
-IACS_path = f'{origin}fields/IACS/1_Polygons/'
-out_folder = path_safe(f'{origin}fields/Fine_dilate_{suffix}/')
-temp_folder = f'{origin}fields/IACS/temp_trash/dilate_{suffix}/'
+IACS_path = f'{origin}fields/01_IACS/1_Polygons/'
+out_folder = path_safe(f'{origin}fields/02_Chips_generated_from_IACS/Fine_dilate_{suffix}_BW/')
+temp_folder = path_safe(f'{origin}fields/IACS/temp_trash/dilate_{suffix}_BW/')
 FORCE_folder = f'{origin}force/output/'
 aux_vrt_path = f'{origin}fields/Auxiliary/vrt/'
-validation_path = f"{origin}fields/Validation_sets/dilate_{suffix}/"
+validation_path = path_safe(f"{origin}fields/02_Chips_generated_from_IACS/Validation_sets/dilate_{suffix}_BW/")
 
 
 # set state and year
-states = ['Brandenburg', 'Niedersachsen', 'MV', 'NRW', 'Saarland']
-state_folders = ['BRB', 'LSA', 'MV', 'NRW', 'SL']
-state_types = ['.geoparquet','.geoparquet','.shp','.geoparquet','.shp']
-state_exclude_columns = ['EC_hcat_n', 'EC_hcat_n', 'NU_BEZ', 'EC_hcat_n', 'BEZ']
+states = ['Brandenburg', 'Niedersachsen', 'MV', 'NRW', 'Saarland', 'BW']
+state_folders = ['BRB', 'LSA', 'MV', 'NRW', 'SL', 'BW']
+state_types = ['.geoparquet','.geoparquet','.shp','.geoparquet','.shp', '.gpkg']
+state_exclude_columns = ['EC_hcat_n', 'EC_hcat_n', 'NU_BEZ', 'EC_hcat_n', 'BEZ', 'Bodenbedeckung']
 # state_burners = ['field_id', 'field_id', 'ID', 'field_id','LWREFSID']
-years = [2022, 2024, 2023, 2020, 2021]
+years = [2022, 2024, 2023, 2020, 2021, 2020]
 
 chip_size = 256
-Total_number_of_samples = 4000
+Total_number_of_samples = 6000
 gtiff_driver = gdal.GetDriverByName('GTiff')
 nc_band_names = ["B2", "B3", "B4", "B8"]
 random.seed(42)
-
+col_list1 = ['BLU', 'GRN', 'RED', 'BNR']
+col_list2 = ['BLUE', 'GREEN', 'RED', 'BROADNIR']
 
 # get IACS file
 for state, state_folder, state_type, state_exclude_column, year in\
     zip(states, state_folders, state_types, state_exclude_columns, years): # state_burner, state_burners,
 
+    if state == 'BW' and year == 2020:
+        colorL = col_list2
+    else:
+        colorL = col_list1
     print(state)
     path = [file for file in getFilelist(IACS_path + state_folder, state_type) if str(year) in file][0]
   
@@ -58,7 +64,7 @@ for state, state_folder, state_type, state_exclude_column, year in\
     force_path = f'{FORCE_folder}{state_folder}/{year}/'
     
     reduced_files = reduce_forceTSA_output_to_validmonths(force_path, 3, 8)
-    ordered_files = force_order_Colors_for_VRT(reduced_files, ['BLU', 'GRN', 'RED', 'BNR'], [f'MONTH-{d:02d}' for d in range(3,9,1)])
+    ordered_files = force_order_Colors_for_VRT(reduced_files, colorL, [f'MONTH-{d:02d}' for d in range(3,9,1)])
 
     vrt_out = path_safe(f'{aux_vrt_path}{state_folder}/{year}/')
 
@@ -66,10 +72,10 @@ for state, state_folder, state_type, state_exclude_column, year in\
         if len(getFilelist(f'{vrt_out}', '.vrt', deep=True)) > 0:
             print('VRT seems to be already computated, probably to create masks based on IACS')
         else:
-            force_to_vrt(reduced_files, ordered_files, vrt_out, True, bandnames=['BLU', 'GRN', 'RED', 'BNR'])
+            force_to_vrt(reduced_files, ordered_files, vrt_out, True, bandnames=colorL)
     else:
         os.makedirs(vrt_out)
-        force_to_vrt(reduced_files, ordered_files, vrt_out, True, bandnames=['BLU', 'GRN', 'RED', 'BNR'])
+        force_to_vrt(reduced_files, ordered_files, vrt_out, True, bandnames=colorL)
 
     vrt_cube_path = [file for file in getFilelist(vrt_out, '.vrt', deep=True) if 'Cube' in file][0]
 

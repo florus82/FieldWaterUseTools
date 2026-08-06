@@ -593,7 +593,7 @@ def InstSegm(extent, boundary, t_ext=0.4, t_bound=0.2):
     t_ext : threshold for extent
     t_bound : threshold for boundary
     OUTPUT:
-    instances
+    instances of agricultural fields
     """
 
     # Threshold extent mask
