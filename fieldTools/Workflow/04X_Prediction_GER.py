@@ -16,9 +16,11 @@ import zipfile
 
 ####################################################### Prepare
 model_name = 'model_state_FromScratch_IACS_dilate_True_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_47'
+# model_name = 'model_state_FromScratch_IACS_dilate_True_BW_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_47'
 model_path = f"{origin}fields/03_Output/models/{model_name}.pth"
-year = 2025
-colorList = ['BLUE', 'GREEN', 'RED', 'BROADNIR']
+year = 2017
+colorList = ['BLUE', 'GREEN', 'RED', 'NIR']
+#colorList = ['BLUE', 'GREEN', 'RED', 'BROADNIR']
 
 # make vrts from force outputs for easier processing
 state = 'GERMANY'

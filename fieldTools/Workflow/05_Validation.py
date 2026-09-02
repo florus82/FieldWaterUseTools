@@ -21,7 +21,8 @@ state_folders = ['BRB', 'LSA', 'MV', 'NRW', 'SL']
 
 # set variables
 year = 2023
-model_name = 'IACS_dilate_True_overlap_40_on_FromScratch_IACS_dilate_True_with_overlap_47_FREEZER_2'#IACS_dilate_False_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_40_on_AI4_RGB_exclude_True_38_FREEZER_2' 
+model_name = 'FromScratch_IACS_dilate_True_BW_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_47'
+#'IACS_dilate_True_overlap_40_on_FromScratch_IACS_dilate_True_with_overlap_47_FREEZER_2'#IACS_dilate_False_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_40_on_AI4_RGB_exclude_True_38_FREEZER_2' 
 state = 'Brandenburg'
 state_code = state_folders[states.index(state)]
 ncores = 100
@@ -29,7 +30,7 @@ np.random.seed(42)
 slicer = 10 # determines the number of tiles whole prediction will be be sliced into
 border_limit = 5 # dont sample fields too close to tile borders
 sample_size  = 20000
-make_tifs_from_intermediate_step = True # for debugging and checks
+make_tifs_from_intermediate_step = False # for debugging and checks
 
 # parameter list to check combinations for
 t_exts = [i/100 for i in range(10, 30, 10)] 
@@ -53,7 +54,7 @@ path_to_IACS = f"{origin}fields/01_IACS/4_Crop_mask/{state_code}/{year}/IACS_{st
 # - cropMask_lines_touch_true_crop_touch_true_linecrop --> contains artefacts: fields where there are none
 # - cropMask_cropMask_lines_touch_true_crop_touch_false_linecrop --> similar to cropMask_cropMask_lines_touch_false_crop_touch_false_linecrop, but less overlap
 
-chip_overlap_mask_combos = ['ThuenenMask_256_20', 'unmasked_chips_256_20']#'ThuenenMask_768_20', 'unmasked_chips_768_20', 'ThuenenMask_512_20', 'unmasked_chips_512_20' 
+chip_overlap_mask_combos = ['masked_chips_256_20', 'unmasked_chips_256_20']#'ThuenenMask_768_20', 'unmasked_chips_768_20', 'ThuenenMask_512_20', 'unmasked_chips_512_20' 
 pred_list = [f"{path_to_predictions}{combi}.vrt" for combi in chip_overlap_mask_combos]
 
 overlords_jobs = []
@@ -67,7 +68,7 @@ for idx, prediction in enumerate(pred_list):
         intermediate_export = False
     reference_arr = subset_mask_to_prediction_extent(path_to_IACS, prediction, returnToMemory=True)
 
-    if 'ThuenenMask' in prediction:
+    if '/masked' in prediction:
         thuenen_arr = subset_mask_to_prediction_extent(thuenen_path, prediction, returnToMemory=True)
         th_mask = np.isin(thuenen_arr, VALID_AGRO_VALUES).astype(np.uint8)
         reference_arr[th_mask == 0] = 0 # important when we test against the thuenen masked prediction

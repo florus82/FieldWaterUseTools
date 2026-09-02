@@ -6,7 +6,7 @@ import random
 
 from osgeo import gdal, osr, ogr
 from datetime import datetime, timezone
-
+import requests
 
 def getFilelist(originpath, ftyp, deep = False, order = True):
     '''
@@ -56,6 +56,11 @@ def path_safe(path):
     os.makedirs(dir_path, exist_ok=True)
     return path
 
+def slash_checker(path):
+    if not path.endswith('/'):
+        return f"{path}/"
+    else:
+        return path
 
 def dirfinder(path):
     """ returns a list with all directory names within a folder
@@ -101,6 +106,47 @@ def get_row_col_indices(chipsize, overlap, number_of_rows, number_of_cols):
     col_start = col_start[:len(col_end)]
 
     return [row_start, row_end, col_start, col_end]
+
+def download_thuenen_cropTypes(year, storpath, stacURL="https://eodata.thuenen.de/stac/api/v1/collections/crop-type-map-latest/items/crop-type-map-latest-"):
+    '''
+    year: year of crop type map (int)
+    storpath: path to folder where crop type map should be stored (str)
+    stacURL: if URL might change in the future please adapt
+    '''
+    
+    stac_url = f"{stacURL}{year}"
+    output_file = f"{slash_checker(storpath)}Thuenen_CropType_{year}.tif"
+
+    # Get STAC metadata
+    item = requests.get(stac_url)
+    item.raise_for_status()
+    item = item.json()
+
+
+    # Pick the first TIFF asset
+    tif_asset = next(
+        asset for asset in item["assets"].values()
+        if "tiff" in asset.get("type", "").lower()
+    )
+
+    url = tif_asset["href"]
+
+
+    # Download entire COG
+    with requests.get(url, stream=True) as r:
+        r.raise_for_status()
+
+        total = int(r.headers.get("content-length", 0))
+        downloaded = 0
+
+        with open(output_file, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+
+
+    print(f"Downloaded complete: {output_file}")
 
 
 def getExtentRas(raster):

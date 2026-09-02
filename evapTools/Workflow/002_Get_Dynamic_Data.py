@@ -1,180 +1,136 @@
 import os
 import sys
-from osgeo import gdal
-import re
-import xdem
-import rasterio
-import numpy as np
-import pandas as pd
-from pyproj import Transformer
-from rasterio.windows import from_bounds
-import odc.stac
-import duckdb
-import fsspec
-from shapely.geometry import box
-import pystac
-from stac_geoparquet.arrow._api import stac_table_to_items
+import time
+import requests
+import openeo
+import cdsapi
 
-from FieldWaterUseTools.FuncBox.Misc import getFilelist, npTOdisk, path_safe, get_query, add_sas_token, is_leap_year, stackReader
-from FieldWaterUseTools.FuncBox.EvapFuncis import warp_ERA5_to_reference, warp_raster_to_reference
-from FieldWaterUseTools.FuncBox.DICT_LIST import REAL_INT_TO_MONTH, STANDARD_ADIABAT, DAYCOUNT_LEAP, DAYCOUNT_NOLEAP
-from FieldWaterUseTools.FuncBox.ForceFuncis import convertVRTpathsTOrelative
+# Dynamic dataset needed are ERA-5 variables, Thuenen crop-type maps, Sentinel-2 and Sentinel-3 dataset
 
+origin = '/workspace/'
+sys.path.append('/media/')
 
-# set year and month for downloading S2 & S3 --> if we do the updates monthwise...
+from Misc import getFilelist, path_safe, slash_checker, download_thuenen_cropTypes # FieldWaterUseTools.FuncBox.
+from DICT_LIST import REAL_INT_TO_MONTH # FieldWaterUseTools.FuncBox.
+
+# set year and month for which to obtain data
+
 YEAR = 2026
-MONTH = 6
+MONTH = 5
 
-################################################################### DEM preprocessing
-# set paths
-storPath_master = path_safe('/place/to/store/porducts/')
-path_to_S3_template = f"{storPath_master}templates/S3_template.tif"
-
-storPath_DEM = f"{storPath_master}DEM/"
-storPath_TILES = f"{storPath_DEM}FORCE_TILES/" # only works if DEM TILES from FORCE tiling scheme are stored there.
-# Otherwise, raw tiles needed to be reprojected first
-storPath_DEM_TILES = f"{storPath_TILES}DEM/"
-
-DEM_GER_path = path_safe(f"{storPath_DEM}vrt_and_derivates/DEM_GER_S2.vrt")
-slope_path = f'{storPath_DEM}vrt_and_derivates/SLOPE_GER_S2.tif'
-aspect_path = f'{storPath_DEM}vrt_and_derivates/ASPECT_GER_S2.tif'
-lat_path = f"{storPath_DEM}vrt_and_derivates/LON_GER_S2.tif"
-lon_path = f"{storPath_DEM}vrt_and_derivates/LAT_GER_S2.tif"
-reproject_path = f"{storPath_DEM}reprojected/"
-
-if os.path.exists(DEM_GER_path):
-    pass
-else:
-    # create vrt for Germany with all downloaded tiles
-    vrt = gdal.BuildVRT(DEM_GER_path, getFilelist(storPath_DEM_TILES, ',tif'), separate = False)
-    vrt = None
-    convertVRTpathsTOrelative(f'{storPath_DEM}vrt_and_derivates/DEM_GER_S2.vrt')
-
-if os.path.exists(slope_path):
-    pass
-else:
-    #### calculate slope and aspect
-    dem = xdem.DEM(DEM_GER_path)
-    slope = dem.slope()
-    aspect = dem.aspect()
-    opts = {
-        "BIGTIFF": "YES",
-        "COMPRESS": "DEFLATE", 
-        "TILED": "YES"
-    }
+# set masterpath for stored data
+storPath_master = slash_checker(path_safe(f"{origin}etZ_REPO_TEST/"))#'/place/to/store/porducts/')
+storPath_S2 = slash_checker(path_safe(f"{storPath_master}{YEAR}/{MONTH:02d}/S2/"))
+storPath_S3 = slash_checker(path_safe(f"{storPath_master}{YEAR}/{MONTH:02d}/S3/"))
+storPath_ERA5 = slash_checker(path_safe(f"{storPath_master}{YEAR}/{MONTH:02d}/ERA5/"))
+storPath_GeoPot = slash_checker(path_safe(f"{storPath_ERA5}GEOPOT/"))
+storPath_Thuen = slash_checker(path_safe(f"{storPath_master}{YEAR}/Thuenen/"))
 
 
-    slope.to_file(slope_path, co_opts=opts)
-    aspect.to_file(aspect_path, co_opts=opts)
 
-    #### create lat and lon
 
-if os.path.exists(lat_path):
-    pass
-else:
-    # get metadata
-    with rasterio.open(DEM_GER_path) as src:
-        width = src.width
-        height = src.height
-        transform = src.transform
-        crs_src = src.crs 
+# ########################################################################## ERA5
 
-    # create grid
-    cols, rows = np.meshgrid(np.arange(width), np.arange(height))
+# client = cdsapi.Client()
 
-    # get center coordinates of pixel
-    xs, ys = rasterio.transform.xy(transform, rows, cols, offset='center')
-    xs = np.array(xs).reshape((height, width))
-    ys = np.array(ys).reshape((height, width))
+# dataset = "reanalysis-era5-single-levels"
 
-    # transform to wgs84
-    transformer = Transformer.from_crs("EPSG:3035", "EPSG:4326", always_xy=True)
-    lons, lats = transformer.transform(xs, ys)
+# variables = [             
+#         "2m_dewpoint_temperature", 
+#         "2m_temperature",
+#         "surface_pressure",
+#         "100m_u_component_of_wind",
+#         "100m_v_component_of_wind",
+#         "total_column_water_vapour",
+#         "surface_solar_radiation_downward_clear_sky"]
 
-    # export
-    out_meta = {
-        "driver": "GTiff",
-        "height": height,
-        "width": width,
-        "count": 1,
-        "dtype": "float32",
-        "crs": crs_src,    
-        "transform": transform,
-        "nodata": -9999
-    }
+# for variable in variables:
+    
+#     varPath = path_safe(f"{storPath_ERA5}grib/{variable}")
+#     storPath = f"{varPath}/{variable}_{YEAR}_{REAL_INT_TO_MONTH[MONTH]}.grib"
 
-    with rasterio.open(lat_path, 'w', **out_meta) as dst:
-        dst.write(lons.astype('float32'), 1)
+#     if os.path.exists(storPath):
+#         pass
+#     else:
+#         try:
+#             request = {
+#                 "product_type": ["reanalysis"],
+#                 "variable": [variable],
+#                 "year": [YEAR],
+#                 "month": [MONTH],
+#                 "day": [
+#                     "01", "02", "03",
+#                     "04", "05", "06",
+#                     "07", "08", "09",
+#                     "10", "11", "12",
+#                     "13", "14", "15",
+#                     "16", "17", "18",
+#                     "19", "20", "21",
+#                     "22", "23", "24",
+#                     "25", "26", "27",
+#                     "28", "29", "30",
+#                     "31"
+#                 ],
+#                 "time": [
+#                     "00:00", "01:00", "02:00",
+#                     "03:00", "04:00", "05:00",
+#                     "06:00", "07:00", "08:00",
+#                     "09:00", "10:00", "11:00",
+#                     "12:00", "13:00", "14:00",
+#                     "15:00", "16:00", "17:00",
+#                     "18:00", "19:00", "20:00",
+#                     "21:00", "22:00", "23:00"
+#                 ],
+#                 "data_format": "grib",
+#                 "download_format": "unarchived",
+#                 "area": [56, 5, 47, 16]
+#             }
 
-    with rasterio.open(lon_path, 'w', **out_meta) as dst:
-        dst.write(lats.astype('float32'), 1)
+#             target = storPath
 
-if len(getFilelist(f"{storPath_TILES}Slope", '.tif', deep=True)) != 0:
-    pass
-else:
-    ##### cut SLOPE, ASPECT, LAT and LON into FORCE TILES (use DEM tiles as template)
-    # set paths and search pattern for tile ending
-    tiles = getFilelist(storPath_DEM_TILES, ',tif')
-    pattern = re.compile(r'X\d{4}_Y\d{4}')
-
-    # loop over tiles and cut tiles from germany-wide tifs
-    for tile_path in tiles:
-        tile_id = pattern.search(tile_path).group()
+#             client.retrieve(dataset, request, target)
         
-        # Get tile extent
-        with rasterio.open(tile_path) as tile:
-            bounds = tile.bounds
-            tile_crs = tile.crs
+#         except Exception as e:
+#             print(e)
+#             t = time.localtime()
+#             ti = time.strftime("%H:%M:%S", t)
+#             print(f"thrown at {ti}")
+#             continue
 
-        for suffix, large_file in zip(['Slope', 'Aspect', 'LAT', 'LON'], [slope_path, aspect_path, lat_path, lon_path]):
-            
-            tile_out_path = path_safe(f"{storPath_TILES}{suffix}/{suffix}_{tile_id}.tif")
-
-            with rasterio.open(large_file) as src:
-                window = from_bounds(*bounds, transform=src.transform)
-                data   = src.read(window=window)
-                transform = src.window_transform(window)
-
-                profile = src.profile.copy()
-                profile.update({
-                    "height":    data.shape[1],
-                    "width":     data.shape[2],
-                    "transform": transform,
-                })
-
-                with rasterio.open(tile_out_path, "w", **profile) as dst:
-                    dst.write(data)
-
-    ##### warp DEM, SLOPE, ASPECT, LAT and LON to LST for air temp correction
-
-    for dname, gpath in zip(['DEM', 'ASPECT', 'SLOPE', 'LAT', 'LON'], [DEM_GER_path, aspect_path, slope_path, lat_path, lon_path]):
-        warp_raster_to_reference(gpath, path_to_S3_template, path_safe(f"{reproject_path}{dname}_GER_S3.tif"))
+# if os.path.exists(path_safe(path_to_geopot_raw)):
+#     pass
+# else:
+#     try:
+#         request = {
+#             "product_type": ["reanalysis"],
+#             "variable": ["geopotential"],
+#             "year": [2020],
+#             "month": [MONTH],
+#             "day": ["01"],
+#             "time": ["13:00"],
+#             "data_format": "grib",
+#             "download_format": "unarchived",
+#             "area": [56, 5, 47, 16]
+#         }
 
 
-################################################################### ERA5 2m AirTemp and Geopotential to S3 warp
+#         target = path_to_geopot_raw
 
-# set variables and parameter
-storPath_ERA5 = path_safe(f"{storPath_master}ERA5/")
-path_to_geopot_raw = f"{storPath_ERA5}grib/geopotential/geopotential_unique.grib"
-path_to_geopot_S3 = path_safe(f"{storPath_ERA5}/tif/S3_res/Geopot/geopotential_S3_res.tif")
-path_to_airTemp_raw = f"{storPath_ERA5}grib/2m_temperature/2m_temperature_{YEAR}_{REAL_INT_TO_MONTH[MONTH]}.grib"
-path_to_airTemp_S3 = path_safe(f"{storPath_ERA5}tif/S3_res/2m_temperature/{YEAR}/2m_temperature_S3_res_{YEAR}_{MONTH:02d}.tif")
+#         client.retrieve(dataset, request, target)
 
-# first, warp geopotential as it is needed for 2m AirTemp
-if os.path.exists(f"{path_to_geopot_S3}.tif"):
-    pass
-else:
-    warp_ERA5_to_reference(path_to_geopot_raw, path_to_S3_template, path_to_geopot_S3, bandL=[1])
+#     except Exception as e:
+#         print(e)
+#         t = time.localtime()
+#         ti = time.strftime("%H:%M:%S", t)
+#         print(f"thrown at {ti}")
 
-# warp air temperature to Sentinel-3 resolution
-if os.path.exists(path_to_airTemp_S3):
-    pass
-else:
-    warp_ERA5_to_reference(path_to_airTemp_raw, path_to_S3_template, path_to_airTemp_S3, sharp_DEM=f"{reproject_path}DEM_GER_S3.tif",
-                            sharp_geopot=path_to_geopot_S3,
-                            sharp_blendheight=100, sharp_rate=STANDARD_ADIABAT)
 
-        
+########################################################################## Thuenen maps agriculture
+# if f"{path_to_Thuenen}"
+
+
+
+
 ################################################################### Sentinel-3 compositing
 #set paths
 path_to_S3_composites = path_safe(f"{storPath_master}Sentinel3/")
@@ -434,10 +390,3 @@ npTOdisk(arr=np.dstack(maxACQL), reference_path=path_to_airTemp_S3,
 npTOdisk(arr=np.dstack(maxACQL_read), reference_path=path_to_airTemp_S3,
             outPath=f"{AcqTime_stor_path}Daily_AcqTime_maxLST_{YEAR}_{REAL_INT_TO_MONTH[MONTH]}_readable.tif",
             bands=len(maxACQL), bandnames=doyL, noData=0)
-
-
-
-
-
-# to be continued
-
