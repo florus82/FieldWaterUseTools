@@ -51,7 +51,7 @@ class TrainingTransformS2(object):
     # Built on Albumentations, this provides geometric transformation only  
     def __init__(self,  prob = 1., mode='train', norm = AI4BNormal_S2() ):
         self.geom_trans = A.Compose([
-                    A.RandomCrop(width=128, height=128, p=1.0),  # Always apply random crop
+                    #A.RandomCrop(width=128, height=128, p=1.0),  # Always apply random crop
                     A.OneOf([
                         A.HorizontalFlip(p=1),
                         A.VerticalFlip(p=1),
@@ -102,6 +102,7 @@ class TrainingTransformS2(object):
 
         timgS2_t = timgS2_t.reshape(c2,t,h2,w2)
         return timgS2_t,  tmask_t
+    
     def __call__(self, *data):
         return self.mytransform(data)
 

@@ -37,12 +37,11 @@ def add_sas_token(item, sas_token):
 # set year and month for which to obtain data
 YEAR = 2026
 
-for MONTH in [5,6,7]:
+for MONTH in [8]:
 
     # set masterpath for stored data
     origin = slash_checker("/data/Aldhani/eoagritwin/et/")
     storPath_master = slash_checker(path_safe(f"{origin}Z_REPO_TEST/"))#'/place/to/store/porducts/')
-    storPath_S3 = slash_checker(path_safe(f"{storPath_master}{YEAR}/{MONTH:02d}/S3/"))
     AirTemp_path = slash_checker(f"{origin}Auxiliary/ERA5/tiff/low_res_rss/2m_temperature/")
 
     ################################################################### Sentinel-3 compositing
@@ -56,10 +55,10 @@ for MONTH in [5,6,7]:
     VZA_maxLST_path = path_safe(f"{VZA_path}maxLST/{YEAR}/")
     VAA_maxLST_path = path_safe(f"{VAA_path}maxLST/{YEAR}/")
 
-    AcqTime_stor_path = path_safe(f"{path_to_S3_composites}Acq_Time/{YEAR}/")
+    AcqTime_stor_path = path_safe(f"{path_to_S3_composites}Acq_time/{YEAR}/")
 
     # Define bounding box and time frame for Germany for S3 compositing
-    bbox = [5.592041, 47.129951, 15.26001, 55.09723]  # Germany
+    bbox = [5.5, 46.9, 15.3, 55.2]  # Germany
     bbox_shape = box(*bbox)
     wkt_bbox = bbox_shape.wkt
 
@@ -95,6 +94,10 @@ for MONTH in [5,6,7]:
         add_sas_token(pystac.Item.from_dict(item_dict), SAS_KEY)
         for item_dict in stac_table_to_items(table)
     ]
+
+
+    for item in items:
+        item.assets["confidence"].extra_fields.get("raster:bands")[0].update({"data_type":"uint32"})    
 
     print(f"Found {len(items)} STAC items for {MONTH}")
 
@@ -235,6 +238,8 @@ for MONTH in [5,6,7]:
 
     ################# export max LST composite
     # LST masked
+
+    template = ds["lst"].isel(time=0).copy()
     npTOdisk(arr=np.dstack(maxLST_LST), reference_path=path_to_airTemp_S3,
                 outPath=f"{LST_maxLST_path}Daily_LST_maxLST_{YEAR}_{REAL_INT_TO_MONTH[MONTH]}.tif",
                 bands=len(maxLST_LST), bandnames=doyL, noData=0)

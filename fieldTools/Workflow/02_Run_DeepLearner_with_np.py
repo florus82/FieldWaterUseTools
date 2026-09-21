@@ -75,7 +75,8 @@ def train(args):
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size,
                               shuffle=False, num_workers=3, pin_memory=True)
 
-    valid_dataset = AI4BDataset(list_of_imgs=listOfimgs,list_of__masks=listOfmasks, mode='valid', ntrain=train_valid_split)
+    valid_dataset = AI4BDataset(list_of_imgs=listOfimgs,list_of__masks=listOfmasks,
+                                transform=TrainingTransformS2(mode='valid'), mode='valid', ntrain=train_valid_split)
     # valid_dataset = AI4BPatchDataset(path_to_data=f"{origin}fields/Fine_tune_dilate_True/", patch_size=128, stride=64, mode='valid')
     valid_loader = DataLoader(dataset=valid_dataset, batch_size=batch_size,
                               shuffle=False, num_workers=3, pin_memory=True)
