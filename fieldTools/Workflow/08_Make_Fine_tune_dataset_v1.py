@@ -409,7 +409,6 @@ for state, state_folder, year in zip(states, state_folders, years):
     geoTF = vrt_ds.GetGeoTransform()
     prj = vrt_ds.GetProjection()
 
-
     force_arr = loadVRTintoNumpyAI4(f"{aux_vrt_path}{state_folder}/{year}/{dirfinder(f'{aux_vrt_path}{state_folder}/{year}/')[0]}",
                                     applyNormalizer=False)
 
@@ -468,7 +467,6 @@ for state, state_folder, year in zip(states, state_folders, years):
             path_safe(f"{out_folder}img/{state_folder}/{year}/{state_folder}_{year}_rowstart_{row['row_start']:04d}_colstart_{row['col_start']:04d}.nc"),
             encoding=encoding)
         
-
     # export validation set
     for idx, row in sample_block_test.iterrows():#sample_df[sample_df['band'] == band_lkp[band]].iterrows():
         

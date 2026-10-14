@@ -132,7 +132,7 @@ class AI4BDataset(torch.utils.data.Dataset):
     # Helper function to read nc to raster 
     def ds2rstr(self,tname):
 
-        variables2use=['B2','B3','B4','B8'] # ,'NDVI']
+        variables2use=['BLU', 'GRN', 'RED', 'NIR']#['B2','B3','B4','B8'] # ,'NDVI']
         ds = xr.open_dataset(tname)
         ds_np = np.concatenate([ds[var].values[None] for var in variables2use],0)
 

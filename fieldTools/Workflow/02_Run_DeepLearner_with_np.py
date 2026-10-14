@@ -63,7 +63,7 @@ def train(args):
     scaler = GradScaler()
 
     train_valid_split = 0.75
-    train_ds_path = f"{origin}fields/02_Chips_generated_from_IACS/Fine_dilate_{dilate}_BW/"
+    train_ds_path = f"{origin}fields/02_Chips_generated_from_IACS/Fine_dilate_{dilate}/"
     imgs_list = getFilelist(train_ds_path, '.nc', deep=True)
     masks_list = getFilelist(train_ds_path, '.tif', deep=True)
 
