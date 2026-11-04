@@ -9,21 +9,24 @@ import pandas as pd
 from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
-from FieldWaterUseTools.FuncBox.other_repos.tfcl.models.ptavit3d import ptavit3d_dn
-from FieldWaterUseTools.FuncBox.other_repos.tfcl.nn.loss.ftnmt_loss import ftnmt_loss               
-from FieldWaterUseTools.FuncBox.other_repos.tfcl.utils.classification_metric import Classification  
-from FieldWaterUseTools.FuncBox.FieldFuncis import *
-from FieldWaterUseTools.FuncBox.Misc import shuffle2Lists
+from tfcl.models.ptavit3d import ptavit3d_dn
+from tfcl.nn.loss.ftnmt_loss import ftnmt_loss               
+from tfcl.utils.classification_metric import Classification  
+from helperFuncs import *
+from helperFuncs_GPU import *
 
 
-db_name = f"FromScratch_IACS"
+
+
+db_name = f"TEST_FromScratch_IACS"
 
 # paths
-train_ds_path = f"{origin}fields/02_Chips_generated_from_IACS/"
-model_out_dir = f"{origin}fields/03_Output/models/"
-loss_out_dir = f"{origin}fields/03_Output/loss/"
+train_ds_path = f"{origin}fields/02_Chips_generated_from_IACS/TEST/" # same as variable "out_folder" in "01_Create_Training_Data.py" 
+model_out_dir = f"{origin}fields/03_Output/models/" # here will the model be stored
+loss_out_dir = f"{origin}fields/03_Output/loss/" # here the calculated loss and MCC
 
 train_valid_split = 0.75
+
 # create output dictionary
 keys = ['Epoch', 'Iteration', 'Loss', 'Mode']
 vals = [list() for _ in range(len(keys))]
@@ -34,23 +37,12 @@ vals = [list() for _ in range(len(keys))]
 res_mcc = dict(zip(keys, vals))
 
 
-# create output dictionary
-keys = ['Epoch', 'Iteration','Loss', 'Mode']
-vals = [list() for _ in range(len(keys))]
-res_loss  = dict(zip(keys, vals))
-
-keys = ['Epoch', 'MCC']
-vals = [list() for _ in range(len(keys))]
-res_mcc  = dict(zip(keys, vals))
-
-best_state = None
-best_epoch = None
-best_mcc = 0
-
 def train(args):
-    # dummy variable to keep track of mcc
-    conti = [1,2]
-    mcc_dum = 0
+
+    # create dummy variables
+    best_state = None
+    best_mcc = 0
+
     num_epochs = args.epochs
     batch_size = args.batch_size
 
@@ -85,13 +77,13 @@ def train(args):
 
     train_dataset = AI4BPatchDataset(list_of_imgs=listOfimgs,list_of__masks=listOfmasks, patch_size=128, stride=64,
                                      transform=TrainingTransformS2(), mode='train', ntrain=train_valid_split)
-    # train_dataset = AI4BPatchDataset(path_to_data=f"{origin}fields/Fine_tune_dilate_True/", patch_size=128, stride=64, mode='train')
+
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size,
                               shuffle=False, num_workers=3, pin_memory=True)
 
     valid_dataset = AI4BDataset(list_of_imgs=listOfimgs,list_of__masks=listOfmasks,
                                 transform=TrainingTransformS2(mode='valid'), mode='valid', ntrain=train_valid_split)
-    # valid_dataset = AI4BPatchDataset(path_to_data=f"{origin}fields/Fine_tune_dilate_True/", patch_size=128, stride=64, mode='valid')
+    
     valid_loader = DataLoader(dataset=valid_dataset, batch_size=batch_size,
                               shuffle=False, num_workers=3, pin_memory=True)
 
@@ -138,35 +130,51 @@ def train(args):
         res_mcc['MCC'].append(kwargs['mcc'])
 
         # check if mcc higher than ever observed
-        if kwargs['mcc'] > mcc_dum:
+        if kwargs['mcc'] > best_mcc:
             best_mcc = kwargs['mcc']
-            best_state = model.state_dict()
-            best_epoch = epoch
+    
+            best_state = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'mcc': best_mcc,
+                'model_config': model_config
+            }
+
+            torch.save(
+                best_state,
+                f'{model_out_dir}best_model_{db_name}.pth'
+            )
         
-     
-        #res.append 
         if verbose:
             output_str = ', '.join(f'{k}:: {v}, |===|, ' for k, v in kwargs.items())
             epoch_pbar.write(output_str)
 
-
     if verbose:
         print("Training completed in: " + str(datetime.now() - start))
 
-    
-    torch.save(conti[0], f'{model_out_dir}model_state_{db_name}_{conti[1]}.pth')
-
     df = pd.DataFrame(data=res_loss)
-    df.to_csv(f'{loss_out_dir}loss_{db_name}_{conti[1]}.csv', sep=',', index=False)
+    df.to_csv(f'{loss_out_dir}loss_{db_name}.csv', sep=',', index=False)
 
     df = pd.DataFrame(data=res_mcc)
-    df.to_csv(f'{loss_out_dir}MCC_{db_name}_{conti[1]}.csv', sep=',', index=False)
+    df.to_csv(f'{loss_out_dir}MCC_{db_name}.csv', sep=',', index=False)
 
+    # store last model as well
+   
+    torch.save(
+    {'epoch': epoch,
+     'model_state_dict': model.state_dict(),
+     'optimizer_state_dict': optimizer.state_dict(),
+     'mcc': kwargs['mcc'],
+     'model_config': model_config
+    },
+    f'{model_out_dir}last_model_{db_name}.pth'
+    )
 
 def main():
     class Args:
         def __init__(self):
-            self.epochs = 50
+            self.epochs = 5
             self.batch_size = 3 # H100 test - 94GB GPU memory
 
     args = Args()
