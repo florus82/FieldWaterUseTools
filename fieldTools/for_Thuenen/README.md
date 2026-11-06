@@ -1,5 +1,5 @@
 # Overview
-The scripts for creating the training dataset from FORCE and IACS data (*01_Create_Training_Data.py*), running the DL architecture (*02_Run_DL_with_np.py*) on this training dataset and then to make a prediction on with the resulting model (*03_Prediction_GER.py*) can be found under the “for_Thuenen” folder in my **FieldWaterUseTools** repo. There are also supporting scripts (*tfcl folder* + *helperFuncs.py*, *helperFuncs_GPU.py*) as well as a folder “FORCE” with parameter and supporting files.
+The scripts for creating the training dataset from FORCE and IACS data (*01_Create_Training_Data.py*), running the DL architecture (*02_Run_DL_with_np.py*) on this training dataset and then to make a prediction on with the resulting model (*03_Prediction_GER.py*) can be found under the “for_Thuenen” folder in my **FieldWaterUseTools** repo. There are also supporting scripts (*tfcl folder* + *helperFuncs.py*, *helperFuncs_GPU.py*) as well as a folder *FORCE* with parameter and supporting files.
 The folder from the repo can be cloned (without the entire repo) via:
 
 ```bash
