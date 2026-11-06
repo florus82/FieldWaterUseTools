@@ -15,18 +15,18 @@ import math
 import zipfile
 
 ####################################################### Prepare
-model_name = 'model_state_FromScratch_IACS_dilate_True_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_47'
-# model_name = 'model_state_FromScratch_IACS_dilate_True_BW_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_47'
-model_path = f"{origin}fields/03_Output/models/{model_name}.pth"
-year = 2017
+model_name = "model_state_FromScratch_IACS_dilate_True_BorderEdgeCutted_RGB_NDVI_exclude_True_with_overlap_47" # state name of model as used in script 02_Run_DL_with_np.py
+model_path = f"{origin}fields/03_Output/models/{model_name}.pth" # path to where model had been stored
+year = 2017 # set the year
+
 colorList = ['BLUE', 'GREEN', 'RED', 'NIR']
 #colorList = ['BLUE', 'GREEN', 'RED', 'BROADNIR']
 
 # make vrts from force outputs for easier processing
 state = 'GERMANY'
 
-vrt_out = path_safe(f'{origin}fields/Auxiliary/vrt/{state}/{year}/')
-reduced_files = reduce_forceTSA_output_to_validmonths(f'{origin}force/output/{state}/{year}/', 3, 8)
+vrt_out = path_safe(f"{origin}fields/Auxiliary/vrt/{state}/{year}/") # here will be a stack of vrts created for FORCE output for Germany
+reduced_files = reduce_forceTSA_output_to_validmonths(f"{origin}force/output/{state}/{year}/", 3, 8) # path to FORCE output
 ordered_files = force_order_Colors_for_VRT(reduced_files, colorList, [f'MONTH-{d:02d}' for d in range(3,9,1)])
 
 if os.path.isdir(vrt_out):
@@ -40,8 +40,8 @@ else:
 
 
 # set folder
-predict_master_folder = path_safe(f"{origin}fields/04_Predictions/{state}/{model_name.split('_state_')[-1]}/{year}/")
-vrt_Folder = f"{origin}/fields/Auxiliary/vrt/{state}/{year}/{dirfinder(f'{origin}/fields/Auxiliary/vrt/{state}/{year}/')[0]}"
+predict_master_folder = path_safe(f"{origin}fields/04_Predictions/{state}/{model_name.split('_state_')[-1]}/{year}/") # folder where prediction will be stored
+vrt_Folder = f"{vrt_out}{dirfinder(vrt_out)[0]}"
 vrtFiles = [file for file in getFilelist(vrt_Folder, '.vrt') if 'Cube' not in file]
 vrtFiles = sortListwithOtherlist([int(vrt.split('_')[-1].split('.')[0]) for vrt in vrtFiles], vrtFiles)[-1]
 

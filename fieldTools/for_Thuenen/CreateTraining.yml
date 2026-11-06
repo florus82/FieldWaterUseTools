@@ -1,0 +1,26 @@
+name: CreateTrainingThuenen
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.12
+  - pyarrow
+  # Geospatial
+  - gdal
+  - geopandas
+  - rasterio
+
+  # Data processing
+  - numpy
+  - pandas
+  - scipy
+  - xarray
+  - rioxarray
+  - netcdf4
+
+  # Image processing
+  - opencv
+
+  # Utilities
+  - tqdm

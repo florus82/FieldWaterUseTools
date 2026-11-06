@@ -1,0 +1,167 @@
+%YY%: 34 34 34 34 35
+%XX%: 58 59 60 61 58
+
+++PARAM_TSA_START++
+
+# INPUT/OUTPUT DIRECTORIES
+# ------------------------------------------------------------------------
+DIR_LOWER = /data/Aldhani/dc/deu/ard/
+DIR_HIGHER = /data/Aldhani/eoagritwin/force/output/for_Thuenen/S2_LS/2017/
+DIR_PROVENANCE = /data/Aldhani/eoagritwin/force/provenance
+
+# MASKING
+# ------------------------------------------------------------------------
+DIR_MASK = NULL
+BASE_MASK = NULL
+READ_ERROR_MASK = SKIP
+
+# OUTPUT OPTIONS
+# ------------------------------------------------------------------------
+OUTPUT_FORMAT = GTiff
+FILE_OUTPUT_OPTIONS = NULL
+OUTPUT_INITIALIZE = TRUE
+OUTPUT_EXPLODE = TRUE
+OUTPUT_SUBFOLDERS = TRUE
+FAIL_IF_EMPTY = FALSE
+
+# PARALLEL PROCESSING
+# ------------------------------------------------------------------------
+NTHREAD_READ = 52
+NTHREAD_COMPUTE = 96
+NTHREAD_WRITE = 26
+STREAMING = TRUE
+PRETTY_PROGRESS = TRUE
+
+# PROCESSING EXTENT AND RESOLUTION
+# ------------------------------------------------------------------------
+X_TILE_RANGE = {%XX%} {%XX%}
+Y_TILE_RANGE = {%YY%} {%YY%}
+FILE_TILE = NULL
+CHUNK_SIZE = 30000 30000
+RESOLUTION = 10
+REDUCE_PSF = FALSE
+USE_L2_IMPROPHE = TRUE
+
+# SENSOR ALLOW-LIST
+# ------------------------------------------------------------------------
+SENSORS = SEN2A SEN2B SEN2C SEN2D LND05 LND07 LND08  #  sen2a sen2b sen2c sen2d
+TARGET_SENSOR = LNDLG
+PRODUCT_TYPE_MAIN = BOA
+PRODUCT_TYPE_QUALITY = QAI
+READ_ERROR_PRIMARY = SKIP
+SPECTRAL_ADJUST = FALSE
+
+# QAI SCREENING
+# ------------------------------------------------------------------------
+SCREEN_QAI = NODATA CLOUD_OPAQUE CLOUD_BUFFER CLOUD_CIRRUS CLOUD_SHADOW SNOW SUBZERO SATURATION
+ABOVE_NOISE = 3
+BELOW_NOISE = 1
+
+# PROCESSING TIMEFRAME
+# ------------------------------------------------------------------------
+DATE_RANGE = 2016-10-01 2018-02-28
+DOY_RANGE = 1 365
+DATE_IGNORE_LANDSAT_7 = 2099-12-31
+
+# SPECTRAL INDEX
+# ------------------------------------------------------------------------
+INDEX = BLUE GREEN RED NIR
+STANDARDIZE_TSS = NONE
+OUTPUT_TSS = FALSE
+
+# SPECTRAL MIXTURE ANALYSIS
+# ------------------------------------------------------------------------
+# This block only applies if INDEX includes SMA
+# ------------------------------------------------------------------------
+FILE_ENDMEM  = NULL
+SMA_SUM_TO_ONE = TRUE
+SMA_NON_NEG = TRUE
+SMA_SHD_NORM = TRUE
+SMA_ENDMEMBER = 1
+OUTPUT_RMS = FALSE
+
+# INTERPOLATION PARAMETERS
+# ------------------------------------------------------------------------
+INTERPOLATE = RBF
+MOVING_MAX = 16
+RBF_SIGMA = 8 16 32
+RBF_CUTOFF = 0.95
+HARMONIC_TREND = TRUE
+HARMONIC_MODES = 3
+HARMONIC_FIT_RANGE = 2018-01-01 2018-12-31
+OUTPUT_NRT = FALSE
+INT_DAY = 5
+STANDARDIZE_TSI = NONE
+OUTPUT_TSI = FALSE
+
+# PYTHON UDF PARAMETERS
+# ------------------------------------------------------------------------
+FILE_PYTHON = NULL
+PYTHON_TYPE = PIXEL
+OUTPUT_PYP = FALSE
+
+# R UDF PARAMETERS
+# ------------------------------------------------------------------------
+# Note: due to OpenMP threading conflicts, the usage of R UDFs will trigger
+# the internal disabling of the streaming functionality (STREAMING = FALSE)
+# ------------------------------------------------------------------------
+FILE_RSTATS = NULL
+RSTATS_TYPE = PIXEL
+OUTPUT_RSP = FALSE
+
+# SPECTRAL TEMPORAL METRICS
+# ------------------------------------------------------------------------
+OUTPUT_STM = FALSE
+STM = Q25 Q50 Q75 AVG STD
+
+# FOLDING PARAMETERS
+# ------------------------------------------------------------------------
+FOLD_TYPE = Q50
+STANDARDIZE_FOLD = NONE
+OUTPUT_FBY = FALSE
+OUTPUT_FBQ = FALSE
+OUTPUT_FBM = TRUE
+OUTPUT_FBW = FALSE
+OUTPUT_FBD = FALSE
+OUTPUT_TRY = FALSE
+OUTPUT_TRQ = FALSE
+OUTPUT_TRM = FALSE
+OUTPUT_TRW = FALSE
+OUTPUT_TRD = FALSE
+OUTPUT_CAY = FALSE
+OUTPUT_CAQ = FALSE
+OUTPUT_CAM = FALSE
+OUTPUT_CAW = FALSE
+OUTPUT_CAD = FALSE
+
+# LAND SURFACE PHENOLOGY PARAMETERS - POLAR-BASED
+# ------------------------------------------------------------------------
+# Please note that these only work well with non-negative indices.--------
+# ------------------------------------------------------------------------
+POL_START_THRESHOLD = 0.2
+POL_MID_THRESHOLD = 0.5
+POL_END_THRESHOLD = 0.8
+POL_ADAPTIVE = TRUE
+POL = VSS VPS VES VSA RMR IGS
+STANDARDIZE_POL = NONE
+OUTPUT_PCT = FALSE
+OUTPUT_POL = FALSE
+OUTPUT_TRO = FALSE
+OUTPUT_CAO = FALSE
+
+# TREND PARAMETERS
+# ------------------------------------------------------------------------
+TREND_TAIL = TWO
+TREND_CONF = 0.95
+CHANGE_PENALTY = FALSE
+
+# ADAPTIVE DATE RANGE
+# ------------------------------------------------------------------------
+ADAPTIVE_RANGE = FALSE
+DIR_ADAPTIVE_RANGE = NULL
+BASE_ADAPTIVE_RANGE = NULL NULL
+ADAPTIVE_RANGE_NODATA = -9999
+ADAPTIVE_START = 736571
+READ_ERROR_SECONDARY = SKIP
+
+++PARAM_TSA_END++

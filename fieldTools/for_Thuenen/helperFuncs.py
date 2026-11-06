@@ -807,3 +807,47 @@ def get_distance_raster(path_to_object, outPath):
         print(f'Distance raster for {path_to_object} created')
     else:
         print(f'distance raster for {path_to_object} already exists!!!')
+
+def getExtentRas(raster):
+    if type(raster) is str:
+        ds = gdal.Open(raster)
+    elif type(raster) is gdal.Dataset:
+        ds = raster
+    gt = ds.GetGeoTransform()
+    ext = {'Xmin': gt[0],
+            'Xmax': gt[0] + (gt[1] * ds.RasterXSize),
+            'Ymin': gt[3] + (gt[5] * ds.RasterYSize),
+            'Ymax': gt[3]}
+    return ext
+
+
+def commonBoundsDim(extentList):
+    # create empty dictionary with list slots for corner coordinates
+    k = ['Xmin', 'Xmax', 'Ymin', 'Ymax']
+    v = [[], [], [], []]
+    res = dict(zip(k, v))
+
+    # fill it with values of all raster files
+    for i in extentList:
+        for j in k:
+            res[j].append(i[j])
+    # determine min or max values per values' list to get common bounding box
+    ff = [max, min, max, min]
+    for i, j in enumerate(ff):
+        res[k[i]] = j(res[k[i]])
+    return res
+
+
+def commonBoundsCoord(ext):
+    if type(ext) is dict:
+        ext = [ext]
+    else:
+        ext = ext
+    cooL = []
+    for i in ext:
+        coo = {'UpperLeftXY': [i['Xmin'], i['Ymax']],
+               'UpperRightXY': [i['Xmax'], i['Ymax']],
+               'LowerRightXY': [i['Xmax'], i['Ymin']],
+               'LowerLeftXY': [i['Xmin'], i['Ymin']]}
+        cooL.append(coo)
+    return cooL

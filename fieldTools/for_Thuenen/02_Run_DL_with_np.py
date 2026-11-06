@@ -1,7 +1,6 @@
 import sys
-
-origin = '/workspace/'
-sys.path.append('/media/')
+origin = '/workspace/' # needs to be adapted to the folders available to the docker
+sys.path.append('/media/')# needs to be adapted to the folders available to the docker
 
 from tqdm import tqdm
 from torch.amp import autocast, GradScaler

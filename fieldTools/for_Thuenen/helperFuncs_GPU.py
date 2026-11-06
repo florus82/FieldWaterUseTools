@@ -300,3 +300,244 @@ def monitor_epoch(model, epoch, datagen_valid, res, criterion, NClasses=1):
     for k, v in metric_kwargs_target.items():
         kwargs[k] = v.cpu().numpy()
     return kwargs
+
+
+
+############################# for prediction
+
+def predict_on_GPU_without_preload(path_to_model, list_of_row_col_indices, list_of_vrts, temp_path = False):
+    '''
+    path_to_model: path to .pth file
+    list_of_row_col_indices: a list in the order row_start, row_end, col_start, col_end (output of get_row_col_indices). This will be used to read in small chips from npdstack
+    list_of_vrtFiles for input stack: has to be read-in and normalized
+    '''
+
+    normalizer = AI4BNormal_S2()
+
+    row_start = list_of_row_col_indices[0]
+    row_end   = list_of_row_col_indices[1]
+    col_start = list_of_row_col_indices[2]
+    col_end   = list_of_row_col_indices[3]
+
+    # define the model (.pth) and assess loss curves
+    #model_name = dataFolder + 'output/models/model_state_All_but_LU_transformed_42.pth'
+    model_name_short = path_to_model.split('/')[-1].split('.')[0]
+ 
+    NClasses = 1
+    nf = 96
+    verbose = True
+    model_config = {'in_channels': 4,
+                    'spatial_size_init': (128, 128),
+                    'depths': [2, 2, 5, 2],
+                    'nfilters_init': nf,
+                    'nheads_start': nf // 4,
+                    'NClasses': NClasses,
+                    'verbose': verbose,
+                    'segm_act': 'sigmoid'}
+
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+    if torch.cuda.is_available():
+        modeli = ptavit3d_dn(**model_config).to(device)
+        modeli.load_state_dict(torch.load(path_to_model))
+        model = modeli.to(device) # Set model to gpu
+        model.eval()
+        
+    preds = []
+
+    for i in range(len(row_end)):
+        for j in range(len(col_end)):
+            bands = []
+            for vrt in list_of_vrts:
+                ds = gdal.Open(vrt, gdal.GA_ReadOnly)
+                bands.append(
+                    ds.GetRasterBand(1).ReadAsArray(col_start[j], row_start[i], col_end[j] - col_start[j], row_end[i] - row_start[i])
+                )
+            cube = np.dstack(bands)  # (y, x, bands)
+
+            data_cube = np.transpose(cube, (2, 0, 1))
+            reshaped_cube = data_cube.reshape(4, 6, cube.shape[0], cube.shape[1])
+            
+            norm_cube = normalizer(reshaped_cube)
+
+            image = torch.tensor(norm_cube) # npdstack[np.newaxis, :, :, row_start[i]:row_end[i], col_start[j]:col_end[j]])
+            image = image.to(torch.float)
+            image = image.unsqueeze(0).to(device)  # Move image to the correct device
+        
+            with torch.no_grad():
+                pred = model(image)
+                preds.append(pred.detach().cpu().numpy())
+
+                print(f"{i} from {len(row_end)} and {j} from {len(col_end)}")
+                
+    torch.cuda.empty_cache()
+    del model
+    del modeli
+    del device
+    del image
+
+    if temp_path:
+        with open(path_safe(f'{temp_path}preds.pkl'), 'wb') as f:
+            pickle.dump(preds, f)
+
+    # Load again
+    # with open(f'{temp_path}preds.pkl', 'rb') as f:
+    #     preds = pickle.load(f)
+
+    return preds
+
+
+def export_GPU_predictions(list_of_predictions, path_to_mask, vrt_path, list_of_row_col_indices, out_path, chipsize, overlap):
+    '''
+    list_of_predictions: a list of predicted chips at same dimensions (output from predict_on_GPU
+    path_to_mask: a path to mask that has the same dimensions as the vrt on which predictions have been
+                undertaken; can be also a list of masks; can also be a cached object
+    vrt_path: path to a folder that contains the vrt files, the predictions (and mask) is based on. Will be used for GeoTransform and Projection
+    list_of_row_col_indices: a list in the order row_start, row_end, col_start, col_end (output of get_row_col_indices). 
+                                Will be used to read in mask chips and manipulate Geotransform
+    out_path: path to where the predicted images should be stored to
+    '''
+
+    row_start = list_of_row_col_indices[0]
+    row_end   = list_of_row_col_indices[1]
+    col_start = list_of_row_col_indices[2]
+    col_end   = list_of_row_col_indices[3]
+
+    if not out_path.endswith('/'):
+        out_path = out_path + '/'
+
+    gtiff_driver = gdal.GetDriverByName('GTiff')
+    vrt_ds = gdal.Open(getFilelist(vrt_path, '.vrt')[0])
+    geoTF = vrt_ds.GetGeoTransform()
+    filenames = [f'X_{col_start[j]}_Y_{row_start[i]}.tif' for i in range(len(row_start)) for j in range(len(col_start))]
+
+    # export unmasked chips
+    for i, file in enumerate(filenames):
+        out_ds = gtiff_driver.Create(path_safe(f'{out_path}unmasked_chips/chips_unmasked{str(chipsize)}_{overlap}_{file}'), int(chipsize - overlap), int(chipsize - overlap), 3, gdal.GDT_Float32)
+        # change the Geotransform for each chip
+        geotf = list(geoTF)
+        # get column and rows from filenames
+        geotf[0] = geotf[0] + geotf[1] * (int(file.split('X_')[-1].split('_')[0]) + overlap/2)
+        geotf[3] = geotf[3] + geotf[5] * (int(file.split('Y_')[-1].split('.')[0]) + overlap/2)
+        #print(f'X:{geoTF[0]}  Y:{geoTF[3]}  AT {file}')
+        out_ds.SetGeoTransform(tuple(geotf))
+        out_ds.SetProjection(vrt_ds.GetProjection())
+
+        arr = list_of_predictions[i][0].transpose(1, 2, 0) # [i][0]
+        for band in range(3):
+            out_ds.GetRasterBand(band + 1).WriteArray(arr[int(overlap/2): -int(overlap/2), int(overlap/2): -int(overlap/2), band])
+        del out_ds
+
+    print('umnasked chips exported')
+
+    # check if mask is a list or single mask
+    if isinstance(path_to_mask, list):
+        pass
+    elif path_to_mask == 'no mask':
+        return
+    else:
+        path_to_mask = [path_to_mask]
+
+    for maski in path_to_mask:
+        if isinstance(maski, np.ndarray):
+            mask_name = 'ThuenenMask'
+            mask = maski
+        else:
+            mask_name = maski.split('cropMask_')[-1].split('.')[0]            
+            # load mask
+            ds = gdal.Open(maski)
+            mask = ds.GetRasterBand(1).ReadAsArray()
+
+        for i, file in enumerate(filenames):
+            out_ds = gtiff_driver.Create(path_safe(f'{out_path}{mask_name}/{mask_name}_{str(chipsize)}_{overlap}_{file}'), int(chipsize - overlap), int(chipsize - overlap), 3, gdal.GDT_Float32)
+            # change the Geotransform for each chip
+            geotf = list(geoTF)
+            # get column and rows from filenames
+            geotf[0] = geotf[0] + geotf[1] * (int(file.split('X_')[-1].split('_')[0]) + overlap/2)
+            geotf[3] = geotf[3] + geotf[5] * (int(file.split('Y_')[-1].split('.')[0]) + overlap/2)
+            #print(f'X:{geoTF[0]}  Y:{geoTF[3]}  AT {file}')
+            out_ds.SetGeoTransform(tuple(geotf))
+            out_ds.SetProjection(vrt_ds.GetProjection())
+
+            arr = list_of_predictions[i][0].transpose(1, 2, 0) # [i][0]
+
+            maskSub = mask[int(int(file.split('Y_')[-1].split('.')[0]) + overlap/2):chipsize + int(int(file.split('Y_')[-1].split('.')[0]) - overlap/2), 
+                        int(int(file.split('X_')[-1].split('_')[0]) + overlap/2):chipsize + int(int(file.split('X_')[-1].split('_')[0]) - overlap/2)]
+            for band in range(3):                
+                out_ds.GetRasterBand(band + 1).WriteArray(arr[int(overlap/2): -int(overlap/2), int(overlap/2): -int(overlap/2), band] * maskSub)
+            del out_ds
+
+def predicted_chips_to_vrt(path_to_chips, chipname, chipsize, overlap, path_to_folder_out, pyramids=False):
+    '''
+    path_to_chips: path to chips exported via export_GPU_predictions
+    chipsize + overlap: the size of these chips (in order to select the chips if chips from different predictions are in the same folder)
+    path_to_folder_out: path to FOLDER where vrt will be stored
+    '''
+    if not path_to_folder_out.endswith('/'):
+        path_to_folder_out = path_to_folder_out + '/'
+    if not path_to_chips.endswith('/'):
+        path_to_chips = path_to_chips + '/'  
+    path_to_chips = f'{path_to_chips}{chipname}/'
+    os.makedirs(path_to_folder_out, exist_ok=True)
+
+    chip_id = f'{chipsize}_{overlap}'
+    chips = getFilelist(path_to_chips, '.tif')
+    chips = [chip for chip in chips if chip_id in chip]
+
+    # for c in chips:print(c)
+    # create stacked vrts of chips
+    vrt_name = f'{path_to_folder_out}{chipname}_{chipsize}_{overlap}.vrt'
+    vrt = gdal.BuildVRT(vrt_name, chips, separate = False)
+    vrt = None
+    convertVRTpathsTOrelative(vrt_name)
+
+    if pyramids:
+        vrtPyramids(vrt_name)
+
+
+def subset_mask_to_prediction_extent(path_reference_mask, path_to_prediction_vrt, area='no_area_specified', returnToMemory=False):
+    '''
+    path_reference_mask: path to the reference mask
+    path_to_prediction_vrt: path to a vrt of the predicted image chips
+    '''
+
+    # check if mask has different extent from prediction
+    # if so, make it the same extent for further processing (classification)
+    # --> mask can never be smaller than prediciton, therefore no need to check # not true for extent of germany
+
+    ext_mask = getExtentRas(path_reference_mask)
+    ext_pred = getExtentRas(path_to_prediction_vrt)
+
+    if ext_mask == ext_pred:
+        print('Mask already has same extent as prediction - no further subsetting needed :)')
+    else:
+        common_bounds = commonBoundsDim([ext_mask, ext_pred])
+        common_coords = commonBoundsCoord(common_bounds)
+        if common_bounds == ext_pred:
+            ds = gdal.Open(path_reference_mask)
+            in_gt = ds.GetGeoTransform()
+            inv_gt = gdal.InvGeoTransform(in_gt)
+            # transform coordinates into offsets (in cells) and make them integer
+            off_UpperLeft = gdal.ApplyGeoTransform(inv_gt, common_coords[0]['UpperLeftXY'][0], common_coords[0]['UpperLeftXY'][1])  # new UL * rastersize^-1  + original ul/rastersize(opposite sign
+            off_LowerRight = gdal.ApplyGeoTransform(inv_gt, common_coords[0]['LowerRightXY'][0], common_coords[0]['LowerRightXY'][1])
+            off_ULx, off_ULy = map(round, off_UpperLeft) 
+            off_LRx, off_LRy = map(round, off_LowerRight)
+
+            band = ds.GetRasterBand(1)
+            data = band.ReadAsArray(off_ULx, off_ULy, off_LRx - off_ULx, off_LRy - off_ULy)
+
+            if not returnToMemory:
+                out_ds = gdal.GetDriverByName('GTiff').Create(f"{path_reference_mask.split('.')[0]}_prediction_extent_{area}.tif", 
+                                                            off_LRx - off_ULx, 
+                                                            off_LRy - off_ULy, 1, ds.GetRasterBand(1).DataType)
+                out_gt = list(in_gt)
+                out_gt[0], out_gt[3] = gdal.ApplyGeoTransform(in_gt, off_ULx, off_ULy)
+                out_ds.SetGeoTransform(out_gt)
+                out_ds.SetProjection(ds.GetProjection())
+
+                out_ds.GetRasterBand(1).WriteArray(data)
+                if band.GetNoDataValue():
+                    out_ds.GetRasterBand(1).SetNoDataValue(band.GetNoDataValue())
+                del out_ds
+            else:
+                return data
